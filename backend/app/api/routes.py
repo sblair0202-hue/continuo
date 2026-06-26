@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -198,15 +200,24 @@ def list_contacts(db: Session = Depends(get_db)):
 
 
 @router.get("/activities")
-def list_activities(db: Session = Depends(get_db)):
-    return db.query(Activity).order_by(Activity.activity_date.desc()).all()
+def list_activities(account_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    q = db.query(Activity)
+    if account_id is not None:
+        q = q.filter(Activity.account_id == account_id)
+    return q.order_by(Activity.activity_date.desc()).all()
 
 
 @router.get("/tasks")
-def list_tasks(db: Session = Depends(get_db)):
-    return db.query(Task).all()
+def list_tasks(account_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    q = db.query(Task)
+    if account_id is not None:
+        q = q.filter(Task.account_id == account_id)
+    return q.all()
 
 
 @router.get("/signals")
-def list_signals(db: Session = Depends(get_db)):
-    return db.query(Signal).order_by(Signal.created_at.desc()).all()
+def list_signals(account_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    q = db.query(Signal)
+    if account_id is not None:
+        q = q.filter(Signal.account_id == account_id)
+    return q.order_by(Signal.created_at.desc()).all()
