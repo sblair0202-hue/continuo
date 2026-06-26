@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 from app.database import Base
 
@@ -25,6 +25,7 @@ class Account(Base):
     contacts = relationship("Contact", back_populates="account")
     activities = relationship("Activity", back_populates="account")
     tasks = relationship("Task", back_populates="account")
+    signals = relationship("Signal", back_populates="account")
 
 
 class Contact(Base):
@@ -45,6 +46,7 @@ class Contact(Base):
     salesforce_contact_id = Column(String, nullable=True)
 
     account = relationship("Account", back_populates="contacts")
+    signals = relationship("Signal", back_populates="contact")
 
 
 class VoiceJournalEntry(Base):
@@ -76,6 +78,7 @@ class Activity(Base):
     source_type = Column(String, default="voice")
 
     account = relationship("Account", back_populates="activities")
+    signals = relationship("Signal", back_populates="activity")
 
 
 class Task(Base):
@@ -94,3 +97,26 @@ class Task(Base):
     salesforce_task_id = Column(String, nullable=True)
 
     account = relationship("Account", back_populates="tasks")
+
+
+class Signal(Base):
+    __tablename__ = "signals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True)
+    signal_type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    evidence_text = Column(Text, nullable=True)
+    confidence_score = Column(Float, default=0.8)
+    impact_level = Column(String, default="medium")
+    urgency = Column(String, default="low")
+    suggested_action = Column(Text, nullable=True)
+    status = Column(String, default="new")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account", back_populates="signals")
+    activity = relationship("Activity", back_populates="signals")
+    contact = relationship("Contact", back_populates="signals")

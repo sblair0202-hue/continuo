@@ -4,13 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.domain import Account, Activity, Contact, Task, VoiceJournalEntry
+from app.models.domain import Account, Activity, Contact, Signal, Task, VoiceJournalEntry
 from app.schemas.voice_journal import (
     ApproveExtractionRequest,
     VoiceJournalCreate,
     VoiceJournalResponse,
 )
-from app.services.extraction_service import extract_field_intelligence
+from app.services.field_intelligence_engine import extract_field_intelligence
 
 router = APIRouter()
 
@@ -104,6 +104,8 @@ def approve_voice_journal(
         contact.last_contacted_at = datetime.utcnow()
         db.add(contact)
 
+    # Save activities and build account_name → activity map for signal linking
+    activity_map: dict[str, Activity] = {}
     for extracted_activity in payload.extraction.activities:
         account = None
         if extracted_activity.account_name:
@@ -123,6 +125,9 @@ def approve_voice_journal(
             confidence_score=extracted_activity.confidence_score,
         )
         db.add(activity)
+        db.flush()  # Populate activity.id before signals reference it
+        if extracted_activity.account_name:
+            activity_map[extracted_activity.account_name] = activity
 
     for extracted_task in payload.extraction.tasks:
         account = None
@@ -141,6 +146,30 @@ def approve_voice_journal(
             source_id=entry.id,
         )
         db.add(task)
+
+    for extracted_signal in payload.extraction.signals:
+        account = None
+        linked_activity = None
+        if extracted_signal.account_name:
+            account = account_map.get(extracted_signal.account_name) or db.query(Account).filter(
+                Account.name == extracted_signal.account_name
+            ).first()
+            linked_activity = activity_map.get(extracted_signal.account_name)
+
+        signal = Signal(
+            activity_id=linked_activity.id if linked_activity else None,
+            account_id=account.id if account else None,
+            signal_type=extracted_signal.signal_type,
+            title=extracted_signal.title,
+            summary=extracted_signal.summary,
+            evidence_text=extracted_signal.evidence_text,
+            confidence_score=extracted_signal.confidence_score,
+            impact_level=extracted_signal.impact_level,
+            urgency=extracted_signal.urgency,
+            suggested_action=extracted_signal.suggested_action,
+            status=extracted_signal.status,
+        )
+        db.add(signal)
 
     entry.reviewed = True
     entry.approved = True
@@ -176,3 +205,8 @@ def list_activities(db: Session = Depends(get_db)):
 @router.get("/tasks")
 def list_tasks(db: Session = Depends(get_db)):
     return db.query(Task).all()
+
+
+@router.get("/signals")
+def list_signals(db: Session = Depends(get_db)):
+    return db.query(Signal).order_by(Signal.created_at.desc()).all()

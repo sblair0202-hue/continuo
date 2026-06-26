@@ -48,11 +48,26 @@ class ExtractedReferralPathwayUpdate(BaseModel):
     open_question: Optional[str] = None
 
 
+class ExtractedSignal(BaseModel):
+    account_name: Optional[str] = None
+    contact_names: List[str] = Field(default_factory=list)
+    signal_type: str
+    title: str
+    summary: Optional[str] = None
+    evidence_text: Optional[str] = None
+    confidence_score: float = 0.8
+    impact_level: str = "medium"
+    urgency: str = "low"
+    suggested_action: Optional[str] = None
+    status: str = "new"
+
+
 class ExtractionResult(BaseModel):
     summary: str
     accounts: List[ExtractedAccount] = Field(default_factory=list)
     contacts: List[ExtractedContact] = Field(default_factory=list)
     activities: List[ExtractedActivity] = Field(default_factory=list)
+    signals: List[ExtractedSignal] = Field(default_factory=list)
     tasks: List[ExtractedTask] = Field(default_factory=list)
     referral_pathway_updates: List[ExtractedReferralPathwayUpdate] = Field(default_factory=list)
     risks: List[str] = Field(default_factory=list)
