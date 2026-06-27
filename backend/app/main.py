@@ -1,6 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 
 from app.api.routes import router
+from app.api.calendar_routes import router as calendar_router
 from app.database import Base, engine
 
 Base.metadata.create_all(bind=engine)
@@ -12,6 +16,7 @@ app = FastAPI(
 )
 
 app.include_router(router)
+app.include_router(calendar_router)
 
 
 @app.get("/")

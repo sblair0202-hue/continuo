@@ -1,8 +1,10 @@
 import type {
   Account,
   Activity,
+  CalendarEvent,
   Contact,
   ExtractionResult,
+  MeetingPrep,
   Signal,
   Task,
   VoiceJournalResponse,
@@ -51,5 +53,11 @@ export const api = {
     request<{ status: string; voice_journal_entry_id: number }>(
       `/voice-journal/${id}/approve`,
       { method: 'POST', body: JSON.stringify({ extraction }) }
+    ),
+  getCalendarStatus: () => request<{ connected: boolean }>('/calendar/status'),
+  getTodayEvents: () => request<CalendarEvent[]>('/calendar/today'),
+  getMeetingPrep: (eventId: string, accountId?: number) =>
+    request<MeetingPrep>(
+      `/calendar/meeting-prep/${encodeURIComponent(eventId)}${accountId != null ? `?account_id=${accountId}` : ''}`
     ),
 };

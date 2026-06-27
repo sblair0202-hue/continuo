@@ -120,3 +120,17 @@ class Signal(Base):
     account = relationship("Account", back_populates="signals")
     activity = relationship("Activity", back_populates="signals")
     contact = relationship("Contact", back_populates="signals")
+
+
+class CalendarToken(Base):
+    __tablename__ = "calendar_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, unique=True, index=True)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    token_uri = Column(String, nullable=True)
+    expiry = Column(DateTime, nullable=True)
+    scopes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

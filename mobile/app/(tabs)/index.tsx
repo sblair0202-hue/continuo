@@ -12,7 +12,7 @@ import {
 
 import { api } from '../../src/api/client';
 import { Colors, impactColor } from '../../src/constants/colors';
-import type { Account, Signal, Task } from '../../src/types';
+import type { Account, CalendarEvent, Signal, Task } from '../../src/types';
 
 type Situation = {
   key: string;
@@ -62,6 +62,13 @@ const SIGNAL_ICON: Record<string, string> = {
   task: '📋',
 };
 
+function formatTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -80,6 +87,8 @@ export default function TodayScreen() {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [meetings, setMeetings] = useState<CalendarEvent[]>([]);
+  const [calendarConnected, setCalendarConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,11 +97,22 @@ export default function TodayScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    Promise.all([api.getSignals(), api.getTasks(), api.getAccounts()])
-      .then(([s, t, a]) => {
+    Promise.all([
+      api.getSignals(),
+      api.getTasks(),
+      api.getAccounts(),
+      api.getCalendarStatus().catch(() => ({ connected: false })),
+    ])
+      .then(([s, t, a, cal]) => {
         setSignals(s);
         setTasks(t);
         setAccounts(a);
+        setCalendarConnected(cal.connected);
+        if (cal.connected) {
+          api.getTodayEvents()
+            .then(setMeetings)
+            .catch(() => setMeetings([]));
+        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => { setLoading(false); setRefreshing(false); });
@@ -169,6 +189,46 @@ export default function TodayScreen() {
               <PulseTile value={riskSignals.length} label="Risks" color={Colors.high} onPress={() => router.push('/(tabs)/accounts')} />
               <PulseTile value={opportunities.length} label="Opps" color={Colors.primary} onPress={() => router.push('/(tabs)/accounts')} />
             </View>
+
+            {/* Today's Meetings */}
+            {calendarConnected && meetings.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>Today's Meetings</Text>
+                {meetings.map((event) => (
+                  <TouchableOpacity
+                    key={event.id}
+                    style={styles.meetingCard}
+                    onPress={() => router.push(`/meeting/${encodeURIComponent(event.id)}?account_id=${event.account_id ?? ''}&title=${encodeURIComponent(event.title)}`)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.meetingTimeCol}>
+                      <Text style={styles.meetingTime}>{formatTime(event.start)}</Text>
+                    </View>
+                    <View style={styles.meetingContent}>
+                      <Text style={styles.meetingTitle} numberOfLines={1}>{event.title}</Text>
+                      {event.account_name && (
+                        <Text style={styles.meetingAccount}>{event.account_name}</Text>
+                      )}
+                      <View style={styles.meetingMeta}>
+                        {event.signal_count > 0 && (
+                          <View style={[styles.metaChip, { backgroundColor: Colors.primaryLight }]}>
+                            <Text style={[styles.metaChipText, { color: Colors.primary }]}>
+                              {event.signal_count} signal{event.signal_count !== 1 ? 's' : ''}
+                            </Text>
+                          </View>
+                        )}
+                        {event.attendees.length > 0 && (
+                          <Text style={styles.meetingAttendees} numberOfLines={1}>
+                            {event.attendees.slice(0, 2).join(', ')}{event.attendees.length > 2 ? ` +${event.attendees.length - 2}` : ''}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <Text style={styles.meetingChevron}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
 
             {/* Needs Attention — situations collapse duplicate signals */}
             {situations.length > 0 && (
@@ -332,6 +392,32 @@ const styles = StyleSheet.create({
 
   errorText: { fontSize: 14, color: Colors.high, marginBottom: 8 },
   bottomSpacer: { height: 20 },
+
+  // Meeting cards
+  meetingCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  meetingTimeCol: { width: 56, alignItems: 'center' },
+  meetingTime: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  meetingContent: { flex: 1 },
+  meetingTitle: { fontSize: 14, fontWeight: '600', color: Colors.text },
+  meetingAccount: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  meetingMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
+  metaChip: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  metaChipText: { fontSize: 11, fontWeight: '600' },
+  meetingAttendees: { fontSize: 11, color: Colors.textSecondary, flex: 1 },
+  meetingChevron: { fontSize: 20, color: Colors.textSecondary, paddingLeft: 4 },
 
   // FAB
   fab: { position: 'absolute', bottom: 16, left: 16, right: 16 },

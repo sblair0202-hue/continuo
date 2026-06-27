@@ -135,3 +135,26 @@ export interface VoiceJournalResponse {
   transcript: string;
   extraction_preview: ExtractionResult;
 }
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  location: string | null;
+  attendees: string[];
+  description: string | null;
+  html_link: string | null;
+  account_id: number | null;
+  account_name: string | null;
+  signal_count: number;
+  contact_count: number;
+}
+
+export interface MeetingPrep {
+  event_id: string;
+  event_title: string;
+  brief: string;
+  signal_count: number;
+  contact_count: number;
+}
