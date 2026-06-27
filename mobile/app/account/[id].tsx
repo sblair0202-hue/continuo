@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -16,6 +17,14 @@ import {
   signalTypeColors,
 } from '../../src/constants/colors';
 import type { Account, Activity, Contact, Signal, Task } from '../../src/types';
+
+const SIGNAL_GROUPS = [
+  { key: 'opportunities', label: 'Opportunities', types: ['opportunity', 'win'] },
+  { key: 'risks',         label: 'Risks',          types: ['risk'] },
+  { key: 'milestones',    label: 'Milestones',     types: ['milestone'] },
+  { key: 'crm',          label: 'CRM & Relationships', types: ['crm', 'relationship', 'continuity', 'referral_pathway'] },
+  { key: 'other',        label: 'Other',           types: ['implementation', 'momentum', 'task', 'question'] },
+] as const;
 
 type AccountData = {
   account: Account;
@@ -32,6 +41,18 @@ export default function AccountScreen() {
   const [data, setData] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    contacts: true,
+    opportunities: true,
+    risks: true,
+    milestones: true,
+    crm: true,
+    other: true,
+    tasks: true,
+  });
+
+  const toggle = (key: string) =>
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     Promise.all([
@@ -71,15 +92,9 @@ export default function AccountScreen() {
   }
 
   const { account, signals, tasks, activities, contacts } = data;
-
-  const impactOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
-  const activeSignals = signals
-    .filter((s) => s.status === 'new')
-    .sort((a, b) => (impactOrder[a.impact_level] ?? 3) - (impactOrder[b.impact_level] ?? 3));
-
+  const activeSignals = signals.filter((s) => s.status === 'new');
   const openTasks = tasks.filter((t) => t.status === 'open');
   const recentActivities = activities.slice(0, 5);
-
   const momentumColor = momentumBadgeColor(account.momentum);
 
   return (
@@ -103,66 +118,103 @@ export default function AccountScreen() {
         </View>
       )}
 
-      <SectionHeader title={`Active Signals (${activeSignals.length})`} />
-      {activeSignals.length === 0 ? (
-        <EmptyState text="No active signals." />
-      ) : (
-        activeSignals.map((signal) => {
-          const tc = signalTypeColors(signal.signal_type);
-          return (
-            <View key={signal.id} style={styles.card}>
-              <View style={styles.signalMeta}>
-                <View style={[styles.badge, { backgroundColor: tc.bg }]}>
-                  <Text style={[styles.badgeText, { color: tc.text }]}>
-                    {signal.signal_type.replace('_', ' ')}
+      {/* Contacts — collapsible toggle at top */}
+      <SectionToggle
+        title="Contacts"
+        count={contacts.length}
+        expanded={expanded.contacts}
+        onToggle={() => toggle('contacts')}
+      />
+      {expanded.contacts && (
+        contacts.length === 0 ? (
+          <EmptyState text="No contacts linked." />
+        ) : (
+          contacts.map((contact) => (
+            <View key={contact.id} style={styles.card}>
+              <View style={styles.contactRow}>
+                <View style={styles.contactInfo}>
+                  <Text style={styles.cardTitle}>{contact.name}</Text>
+                  {contact.role && <Text style={styles.cardSub}>{contact.role}</Text>}
+                  {contact.discipline && <Text style={styles.cardSub}>{contact.discipline}</Text>}
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: Colors.primaryLight }]}>
+                  <Text style={[styles.badgeText, { color: Colors.primary }]}>
+                    {contact.relationship_status}
                   </Text>
                 </View>
-                <View style={[styles.dot, { backgroundColor: impactColor(signal.impact_level) }]} />
               </View>
-              <Text style={styles.cardTitle}>{signal.title}</Text>
-              {signal.suggested_action && (
-                <Text style={styles.cardSub}>{signal.suggested_action}</Text>
+              {contact.relationship_notes && (
+                <Text style={[styles.cardSub, { marginTop: 6 }]}>{contact.relationship_notes}</Text>
               )}
             </View>
-          );
-        })
+          ))
+        )
       )}
 
-      <SectionHeader title={`Open Tasks (${openTasks.length})`} />
-      {openTasks.length === 0 ? (
-        <EmptyState text="No open tasks." />
-      ) : (
-        openTasks.map((task) => (
-          <View key={task.id} style={[styles.card, styles.taskCard]}>
-            <View style={[styles.priorityDot, { backgroundColor: impactColor(task.priority === 'high' ? 'high' : task.priority === 'medium' ? 'medium' : 'low') }]} />
-            <Text style={styles.cardTitle}>{task.title}</Text>
-            {task.description && <Text style={styles.cardSub}>{task.description}</Text>}
+      {/* Signals grouped by type */}
+      {SIGNAL_GROUPS.map(({ key, label, types }) => {
+        const groupSignals = activeSignals.filter((s) =>
+          (types as readonly string[]).includes(s.signal_type)
+        );
+        if (groupSignals.length === 0) return null;
+        return (
+          <View key={key}>
+            <SectionToggle
+              title={label}
+              count={groupSignals.length}
+              expanded={expanded[key]}
+              onToggle={() => toggle(key)}
+            />
+            {expanded[key] && groupSignals.map((signal) => {
+              const tc = signalTypeColors(signal.signal_type);
+              return (
+                <View key={signal.id} style={styles.card}>
+                  <View style={styles.signalMeta}>
+                    <View style={[styles.badge, { backgroundColor: tc.bg }]}>
+                      <Text style={[styles.badgeText, { color: tc.text }]}>
+                        {signal.signal_type.replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                    <View style={[styles.dot, { backgroundColor: impactColor(signal.impact_level) }]} />
+                  </View>
+                  <Text style={styles.cardTitle}>{signal.title}</Text>
+                  {signal.suggested_action && (
+                    <Text style={styles.cardSub}>{signal.suggested_action}</Text>
+                  )}
+                </View>
+              );
+            })}
           </View>
-        ))
-      )}
+        );
+      })}
 
-      <SectionHeader title={`Contacts (${contacts.length})`} />
-      {contacts.length === 0 ? (
-        <EmptyState text="No contacts linked to this account." />
-      ) : (
-        contacts.map((contact) => (
-          <View key={contact.id} style={[styles.card, styles.contactCard]}>
-            <View style={styles.contactRow}>
-              <View>
-                <Text style={styles.cardTitle}>{contact.name}</Text>
-                {contact.role && <Text style={styles.cardSub}>{contact.role}</Text>}
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: Colors.primaryLight }]}>
-                <Text style={[styles.badgeText, { color: Colors.primary }]}>
-                  {contact.relationship_status}
-                </Text>
+      {/* Tasks */}
+      <SectionToggle
+        title="Tasks"
+        count={openTasks.length}
+        expanded={expanded.tasks}
+        onToggle={() => toggle('tasks')}
+      />
+      {expanded.tasks && (
+        openTasks.length === 0 ? (
+          <EmptyState text="No open tasks." />
+        ) : (
+          openTasks.map((task) => (
+            <View key={task.id} style={styles.card}>
+              <View style={styles.taskRow}>
+                <View style={[styles.priorityDot, { backgroundColor: impactColor(task.priority === 'high' ? 'high' : task.priority === 'medium' ? 'medium' : 'low') }]} />
+                <View style={styles.taskContent}>
+                  <Text style={styles.cardTitle}>{task.title}</Text>
+                  {task.description && <Text style={styles.cardSub}>{task.description}</Text>}
+                </View>
               </View>
             </View>
-          </View>
-        ))
+          ))
+        )
       )}
 
-      <SectionHeader title="Recent Activities" />
+      {/* Recent Activities — always visible at bottom */}
+      <Text style={styles.sectionHeaderPlain}>Recent Activities</Text>
       {recentActivities.length === 0 ? (
         <EmptyState text="No activities yet." />
       ) : (
@@ -182,8 +234,23 @@ export default function AccountScreen() {
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
+function SectionToggle({
+  title,
+  count,
+  expanded,
+  onToggle,
+}: {
+  title: string;
+  count: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.sectionToggleRow} onPress={onToggle} activeOpacity={0.7}>
+      <Text style={styles.sectionHeader}>{title} ({count})</Text>
+      <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+    </TouchableOpacity>
+  );
 }
 
 function EmptyState({ text }: { text: string }) {
@@ -224,7 +291,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   nextActionText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
+  sectionToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+    paddingVertical: 2,
+  },
   sectionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  sectionHeaderPlain: {
     fontSize: 11,
     fontWeight: '700',
     color: Colors.textSecondary,
@@ -233,6 +315,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 8,
   },
+  chevron: { fontSize: 14, color: Colors.textSecondary },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 10,
@@ -244,17 +327,18 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  taskCard: { flexDirection: 'column', gap: 6 },
-  contactCard: {},
   signalMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   badge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { fontSize: 11, fontWeight: '600' },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  priorityDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 4 },
+  contactRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  contactInfo: { flex: 1 },
+  statusBadge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
+  taskRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  taskContent: { flex: 1 },
+  priorityDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   cardTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
   cardSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 3 },
-  contactRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statusBadge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   activityRow: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,

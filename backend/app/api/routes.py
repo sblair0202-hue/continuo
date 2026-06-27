@@ -221,3 +221,13 @@ def list_signals(account_id: Optional[int] = Query(None), db: Session = Depends(
     if account_id is not None:
         q = q.filter(Signal.account_id == account_id)
     return q.order_by(Signal.created_at.desc()).all()
+
+
+@router.delete("/signals/{signal_id}")
+def delete_signal(signal_id: int, db: Session = Depends(get_db)):
+    signal = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    db.delete(signal)
+    db.commit()
+    return {"status": "deleted"}

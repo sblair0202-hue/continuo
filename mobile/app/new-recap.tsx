@@ -68,7 +68,9 @@ export default function NewRecapScreen() {
         </TouchableOpacity>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
+      </ScrollView>
 
+      <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.analyzeButton, loading && styles.analyzeButtonDisabled]}
           onPress={handleAnalyze}
@@ -80,7 +82,7 @@ export default function NewRecapScreen() {
             <Text style={styles.analyzeText}>Analyze</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -119,8 +121,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
   },
+  footer: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: Colors.background,
+  },
   analyzeButton: {
-    marginTop: 20,
     backgroundColor: Colors.primary,
     borderRadius: 12,
     paddingVertical: 16,

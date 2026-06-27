@@ -9,15 +9,27 @@ import type {
 } from '../types';
 
 // For device testing via Expo Go, replace with your machine's LAN IP (e.g. http://192.168.1.x:8000)
-export const API_BASE_URL = 'http://192.168.1.250:8000';
+export const API_BASE_URL = 'http://192.168.1.204:8000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
-  return res.json() as Promise<T>;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...options,
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    return res.json() as Promise<T>;
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`Cannot reach server at ${API_BASE_URL}. Is the backend running?`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const api = {

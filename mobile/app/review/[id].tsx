@@ -1,17 +1,25 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 
 import { api } from '../../src/api/client';
 import { Colors, impactColor, signalTypeColors } from '../../src/constants/colors';
 import type { ExtractionResult } from '../../src/types';
+
+const IMPACT_LABEL: Record<string, string> = {
+  high: 'HIGH IMPACT',
+  medium: 'MEDIUM IMPACT',
+  low: 'LOW IMPACT',
+};
 
 type ReviewState = {
   accounts: boolean[];
@@ -34,11 +42,20 @@ export default function ReviewScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [tasksExpanded, setTasksExpanded] = useState(false);
 
-  function toggle(section: keyof ReviewState, index: number) {
+  function reject(section: keyof ReviewState, index: number) {
     setReview((prev) => {
       const updated = [...prev[section]];
-      updated[index] = !updated[index];
+      updated[index] = false;
+      return { ...prev, [section]: updated };
+    });
+  }
+
+  function restore(section: keyof ReviewState, index: number) {
+    setReview((prev) => {
+      const updated = [...prev[section]];
+      updated[index] = true;
       return { ...prev, [section]: updated };
     });
   }
@@ -70,10 +87,12 @@ export default function ReviewScreen() {
 
         <SectionHeader title="Accounts" />
         {extraction.accounts.map((account, i) => (
-          <ReviewRow
+          <SwipeableRow
             key={i}
             accepted={review.accounts[i]}
-            onToggle={() => toggle('accounts', i)}
+            onReject={() => reject('accounts', i)}
+            onRestore={() => restore('accounts', i)}
+            prominent={false}
           >
             <Text style={[styles.itemTitle, !review.accounts[i] && styles.rejected]}>
               {account.name}
@@ -83,34 +102,18 @@ export default function ReviewScreen() {
                 {account.city}{account.state ? `, ${account.state}` : ''}
               </Text>
             )}
-          </ReviewRow>
-        ))}
-
-        <SectionHeader title="Contacts" />
-        {extraction.contacts.map((contact, i) => (
-          <ReviewRow
-            key={i}
-            accepted={review.contacts[i]}
-            onToggle={() => toggle('contacts', i)}
-          >
-            <Text style={[styles.itemTitle, !review.contacts[i] && styles.rejected]}>
-              {contact.name}
-            </Text>
-            {contact.role && <Text style={styles.itemSub}>{contact.role}</Text>}
-            {contact.account_name && (
-              <Text style={styles.itemSub}>{contact.account_name}</Text>
-            )}
-          </ReviewRow>
+          </SwipeableRow>
         ))}
 
         <SectionHeader title="Signals" prominent />
         {extraction.signals.map((signal, i) => {
           const tc = signalTypeColors(signal.signal_type);
           return (
-            <ReviewRow
+            <SwipeableRow
               key={i}
               accepted={review.signals[i]}
-              onToggle={() => toggle('signals', i)}
+              onReject={() => reject('signals', i)}
+              onRestore={() => restore('signals', i)}
               prominent
             >
               <View style={styles.signalHeader}>
@@ -119,12 +122,11 @@ export default function ReviewScreen() {
                     {signal.signal_type.replace('_', ' ')}
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.impactDot,
-                    { backgroundColor: impactColor(signal.impact_level) },
-                  ]}
-                />
+                <View style={[styles.impactBadge, { borderColor: impactColor(signal.impact_level) }]}>
+                  <Text style={[styles.impactBadgeText, { color: impactColor(signal.impact_level) }]}>
+                    {IMPACT_LABEL[signal.impact_level] ?? signal.impact_level.toUpperCase()}
+                  </Text>
+                </View>
               </View>
               <Text style={[styles.itemTitle, !review.signals[i] && styles.rejected]}>
                 {signal.title}
@@ -132,16 +134,44 @@ export default function ReviewScreen() {
               {signal.suggested_action && (
                 <Text style={styles.itemSub}>{signal.suggested_action}</Text>
               )}
-            </ReviewRow>
+            </SwipeableRow>
           );
         })}
 
-        <SectionHeader title="Tasks" />
-        {extraction.tasks.map((task, i) => (
-          <ReviewRow
+        <SectionHeader title="Contacts" />
+        {extraction.contacts.map((contact, i) => (
+          <SwipeableRow
+            key={i}
+            accepted={review.contacts[i]}
+            onReject={() => reject('contacts', i)}
+            onRestore={() => restore('contacts', i)}
+            prominent={false}
+          >
+            <Text style={[styles.itemTitle, !review.contacts[i] && styles.rejected]}>
+              {contact.name}
+            </Text>
+            {contact.role && <Text style={styles.itemSub}>{contact.role}</Text>}
+            {contact.account_name && (
+              <Text style={styles.itemSub}>{contact.account_name}</Text>
+            )}
+          </SwipeableRow>
+        ))}
+
+        <TouchableOpacity
+          style={styles.tasksCollapse}
+          onPress={() => setTasksExpanded((v) => !v)}
+        >
+          <Text style={styles.tasksCollapseText}>
+            Generated Tasks ({extraction.tasks.length}) {tasksExpanded ? '▲' : '▼'}
+          </Text>
+        </TouchableOpacity>
+        {tasksExpanded && extraction.tasks.map((task, i) => (
+          <SwipeableRow
             key={i}
             accepted={review.tasks[i]}
-            onToggle={() => toggle('tasks', i)}
+            onReject={() => reject('tasks', i)}
+            onRestore={() => restore('tasks', i)}
+            prominent={false}
           >
             <View style={styles.taskRow}>
               <View style={[styles.priorityBadge, { backgroundColor: Colors.task }]}>
@@ -152,7 +182,7 @@ export default function ReviewScreen() {
               {task.title}
             </Text>
             {task.account_name && <Text style={styles.itemSub}>{task.account_name}</Text>}
-          </ReviewRow>
+          </SwipeableRow>
         ))}
 
         <View style={styles.bottomSpacer} />
@@ -168,7 +198,7 @@ export default function ReviewScreen() {
           {saving ? (
             <ActivityIndicator color={Colors.surface} />
           ) : (
-            <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save Approved'}</Text>
+            <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save Memory'}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -184,26 +214,64 @@ function SectionHeader({ title, prominent }: { title: string; prominent?: boolea
   );
 }
 
-function ReviewRow({
+function SwipeableRow({
   children,
   accepted,
-  onToggle,
+  onReject,
+  onRestore,
   prominent,
 }: {
   children: React.ReactNode;
   accepted: boolean;
-  onToggle: () => void;
-  prominent?: boolean;
+  onReject: () => void;
+  onRestore: () => void;
+  prominent: boolean;
 }) {
-  return (
-    <View style={[styles.row, prominent && styles.rowProminent, !accepted && styles.rowRejected]}>
-      <View style={styles.rowContent}>{children}</View>
-      <TouchableOpacity style={styles.toggleButton} onPress={onToggle}>
-        <Text style={[styles.toggleText, accepted ? styles.toggleAccept : styles.toggleReject]}>
-          {accepted ? '✓' : '✗'}
-        </Text>
+  const swipeableRef = useRef<Swipeable>(null);
+
+  function renderRightAction(progress: Animated.AnimatedInterpolation<number>) {
+    const translateX = progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [80, 0],
+    });
+    return (
+      <Animated.View style={[styles.deleteAction, { transform: [{ translateX }] }]}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => {
+            swipeableRef.current?.close();
+            onReject();
+          }}
+        >
+          <Text style={styles.deleteText}>Remove</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  if (!accepted) {
+    return (
+      <TouchableOpacity
+        style={[styles.row, prominent && styles.rowProminent, styles.rowRejected]}
+        onPress={onRestore}
+      >
+        <View style={styles.rowContent}>{children}</View>
+        <Text style={styles.restoreText}>Undo</Text>
       </TouchableOpacity>
-    </View>
+    );
+  }
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={renderRightAction}
+      rightThreshold={40}
+      overshootRight={false}
+    >
+      <View style={[styles.row, prominent && styles.rowProminent]}>
+        <View style={styles.rowContent}>{children}</View>
+      </View>
+    </Swipeable>
   );
 }
 
@@ -237,33 +305,43 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: Colors.primary,
   },
-  rowRejected: { opacity: 0.45 },
+  rowRejected: { opacity: 0.4 },
   rowContent: { flex: 1 },
   itemTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
   itemSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 3 },
   rejected: { textDecorationLine: 'line-through' },
-  signalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  badge: {
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
+  signalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' },
+  badge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { fontSize: 11, fontWeight: '600' },
-  impactDot: { width: 8, height: 8, borderRadius: 4 },
+  impactBadge: { borderRadius: 4, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
+  impactBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  tasksCollapse: {
+    marginTop: 20,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  tasksCollapseText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
   taskRow: { flexDirection: 'row', marginBottom: 4 },
   priorityBadge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
-  toggleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
+  deleteAction: {
+    marginBottom: 8,
     justifyContent: 'center',
-    backgroundColor: Colors.background,
-    marginLeft: 10,
   },
-  toggleText: { fontSize: 16, fontWeight: '700' },
-  toggleAccept: { color: Colors.low },
-  toggleReject: { color: Colors.high },
+  deleteButton: {
+    backgroundColor: Colors.high,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 10,
+    height: '100%',
+  },
+  deleteText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  restoreText: { fontSize: 12, color: Colors.primary, fontWeight: '600', marginLeft: 8 },
   footer: {
     padding: 16,
     backgroundColor: Colors.surface,
