@@ -1,3 +1,17 @@
+import {
+  HankenGrotesk_400Regular,
+  HankenGrotesk_500Medium,
+  HankenGrotesk_600SemiBold,
+  HankenGrotesk_700Bold,
+  useFonts as useHanken,
+} from '@expo-google-fonts/hanken-grotesk';
+import {
+  Newsreader_400Regular_Italic,
+} from '@expo-google-fonts/newsreader';
+import {
+  SpaceMono_400Regular,
+  SpaceMono_700Bold,
+} from '@expo-google-fonts/space-mono';
 import { useRouter, useSegments } from 'expo-router';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -6,6 +20,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { Colors } from '../src/constants/colors';
 
 function RootNavigator() {
   const { user, isLoading, needsBiometricUnlock } = useAuth();
@@ -28,8 +43,8 @@ function RootNavigator() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#FAF9F7', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color="#9E9A94" />
+      <View style={{ flex: 1, backgroundColor: Colors.paper, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color={Colors.sky} />
       </View>
     );
   }
@@ -37,10 +52,10 @@ function RootNavigator() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: '#FFFFFF' },
-        headerTintColor: '#1B4F8A',
-        headerTitleStyle: { fontWeight: '600' },
-        contentStyle: { backgroundColor: '#F8F9FA' },
+        headerStyle: { backgroundColor: Colors.surface },
+        headerTintColor: Colors.sky,
+        headerTitleStyle: { fontFamily: 'HankenGrotesk_600SemiBold', color: Colors.ink },
+        contentStyle: { backgroundColor: Colors.paper },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -56,6 +71,24 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useHanken({
+    HankenGrotesk_400Regular,
+    HankenGrotesk_500Medium,
+    HankenGrotesk_600SemiBold,
+    HankenGrotesk_700Bold,
+    Newsreader_400Regular_Italic,
+    SpaceMono_400Regular,
+    SpaceMono_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.paper, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color={Colors.sky} />
+      </View>
+    );
+  }
+
   return (
     <AuthProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>

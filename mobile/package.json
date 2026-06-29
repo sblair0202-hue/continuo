@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/hanken-grotesk": "^0.4.3",
+    "@expo-google-fonts/newsreader": "^0.4.1",
+    "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",
     "expo": "^56.0.12",
     "expo-asset": "~56.0.17",
     "expo-constants": "~56.0.18",
+    "expo-font": "~56.0.7",
     "expo-image-picker": "~56.0.18",
     "expo-linking": "~56.0.14",
     "expo-local-authentication": "~56.0.4",
@@ -19,6 +23,7 @@
     "react-native-gesture-handler": "~2.31.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
+    "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
