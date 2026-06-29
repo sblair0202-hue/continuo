@@ -3,13 +3,12 @@ from datetime import datetime
 
 import httpx
 
-NOTION_TOKEN = os.getenv("NOTION_TOKEN", "")
 NOTION_VERSION = "2022-06-28"
 
 
 def _headers() -> dict:
     return {
-        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Authorization": f"Bearer {os.getenv('NOTION_TOKEN', '')}",
         "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
@@ -58,11 +57,20 @@ def import_accounts_from_notion(database_id: str) -> list[dict]:
 
         for page in data.get("results", []):
             props = page.get("properties", {})
+            # Auto-detect: Notion databases always have exactly one "title" type property
             name = ""
-            for key in ("Name", "Account", "Account Name", "name"):
-                if key in props:
-                    name = _extract_text(props[key])
+            for prop in props.values():
+                if prop.get("type") == "title":
+                    name = _extract_text(prop)
                     break
+            # Fallback to common name keys if title prop was empty
+            if not name:
+                for key in ("Name", "Account", "Account Name", "Facility", "Hospital", "Client", "name"):
+                    if key in props:
+                        val = _extract_text(props[key])
+                        if val:
+                            name = val
+                            break
             if not name:
                 continue
 
@@ -159,7 +167,7 @@ def sync_accounts(accounts: list, signals: list) -> dict:
     database_id = os.getenv("NOTION_DATABASE_ID", "")
     if not database_id:
         raise ValueError("NOTION_DATABASE_ID not set in environment")
-    if not NOTION_TOKEN:
+    if not os.getenv("NOTION_TOKEN", ""):
         raise ValueError("NOTION_TOKEN not set in environment")
 
     existing = fetch_existing_pages(database_id)
