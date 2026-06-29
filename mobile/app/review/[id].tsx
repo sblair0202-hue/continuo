@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '../../src/api/client';
 import { Colors, Radius, impactColor, signalTypeColors, sp } from '../../src/constants/colors';
-import type { ExtractionResult } from '../../src/types';
+import type { Account, ExtractionResult } from '../../src/types';
 
 const IMPACT_LABEL: Record<string, string> = {
   high: 'HIGH IMPACT',
@@ -65,6 +65,23 @@ export default function ReviewScreen() {
   const [saved, setSaved] = useState(false);
   const [tasksExpanded, setTasksExpanded] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
+  const [existingAccounts, setExistingAccounts] = useState<Account[]>([]);
+
+  useEffect(() => {
+    api.getAccounts().then(setExistingAccounts).catch(() => {});
+  }, []);
+
+  function findSimilarAccount(name: string): Account | null {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const target = norm(name);
+    if (!target) return null;
+    for (const a of existingAccounts) {
+      const existing = norm(a.name);
+      if (existing === target) return null; // exact match — get_or_create handles it fine
+      if (existing.includes(target) || target.includes(existing)) return a;
+    }
+    return null;
+  }
 
   function updateField(section: Section, index: number, fields: object) {
     setDraft(prev => ({
@@ -125,25 +142,45 @@ export default function ReviewScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
 
         <SectionHeader title="Accounts" />
-        {draft.accounts.map((account, i) => (
-          <SwipeableRow
-            key={i}
-            accepted={review.accounts[i]}
-            onReject={() => reject('accounts', i)}
-            onRestore={() => restore('accounts', i)}
-            onEdit={() => setEditTarget({ section: 'accounts', index: i })}
-            prominent={false}
-          >
-            <Text style={[styles.itemTitle, !review.accounts[i] && styles.rejected]}>
-              {account.name}
-            </Text>
-            {account.city && (
-              <Text style={styles.itemSub}>
-                {account.city}{account.state ? `, ${account.state}` : ''}
+        {draft.accounts.map((account, i) => {
+          const similar = findSimilarAccount(account.name);
+          return (
+            <SwipeableRow
+              key={i}
+              accepted={review.accounts[i]}
+              onReject={() => reject('accounts', i)}
+              onRestore={() => restore('accounts', i)}
+              onEdit={() => setEditTarget({ section: 'accounts', index: i })}
+              prominent={false}
+            >
+              <Text style={[styles.itemTitle, !review.accounts[i] && styles.rejected]}>
+                {account.name}
               </Text>
-            )}
-          </SwipeableRow>
-        ))}
+              {account.city && (
+                <Text style={styles.itemSub}>
+                  {account.city}{account.state ? `, ${account.state}` : ''}
+                </Text>
+              )}
+              {similar && review.accounts[i] && (
+                <View style={styles.mergeRow}>
+                  <Text style={styles.mergeText}>⚠️ Similar account: "{similar.name}"</Text>
+                  <TouchableOpacity
+                    onPress={() => updateField('accounts', i, { name: similar.name })}
+                    style={styles.mergeBtn}
+                  >
+                    <Text style={styles.mergeBtnText}>Merge</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {/* keep as-is */}}
+                    style={[styles.mergeBtn, styles.mergeBtnAlt]}
+                  >
+                    <Text style={[styles.mergeBtnText, { color: Colors.graphite }]}>Keep new</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </SwipeableRow>
+          );
+        })}
 
         <SectionHeader title="Signals" prominent />
         <Text style={styles.signalHint}>Swipe to remove · Tap to edit · Tap "Defer" to review later</Text>
@@ -630,6 +667,11 @@ const styles = StyleSheet.create({
   saveText: { color: Colors.surface, fontSize: 16, fontWeight: '700' },
   bottomSpacer: { height: 20 },
   signalHint: { fontSize: 12, color: Colors.textSecondary, marginBottom: 8, marginTop: -4 },
+  mergeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+  mergeText: { fontSize: 11, color: Colors.clay, flex: 1, flexShrink: 1 },
+  mergeBtn: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6, backgroundColor: Colors.sage, minWidth: 48, alignItems: 'center' },
+  mergeBtnAlt: { backgroundColor: Colors.linen },
+  mergeBtnText: { fontSize: 11, fontWeight: '700', color: Colors.paper },
   deferBtn: {
     marginLeft: 'auto',
     borderRadius: 12,

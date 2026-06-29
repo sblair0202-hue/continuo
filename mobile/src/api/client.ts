@@ -128,7 +128,7 @@ export const api = {
   getNotionStatus: () => request<NotionStatus>('/notion/status'),
   notionSync: () => request<NotionSyncResult>('/notion/sync', { method: 'POST' }),
   notionImport: (databaseId?: string) =>
-    request<{ imported: number; skipped: number; total_in_notion: number }>(
+    request<{ imported: number; updated: number; skipped: number; total_in_notion: number }>(
       `/notion/import${databaseId ? `?database_id=${databaseId}` : ''}`,
       { method: 'POST', timeoutMs: 30000 }
     ),

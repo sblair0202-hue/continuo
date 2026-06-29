@@ -43,9 +43,13 @@ export default function SettingsScreen() {
     setNotionImporting(true);
     try {
       const result = await api.notionImport();
+      const parts = [];
+      if (result.imported > 0) parts.push(`${result.imported} new`);
+      if (result.updated > 0) parts.push(`${result.updated} updated with referral info`);
+      if (result.skipped > 0) parts.push(`${result.skipped} unchanged`);
       Alert.alert(
         'Notion Import Complete',
-        `Imported ${result.imported} accounts, skipped ${result.skipped} already in the app (${result.total_in_notion} total in Notion).`,
+        `${parts.join(', ')} (${result.total_in_notion} total in Notion).`,
         [{ text: 'OK' }]
       );
     } catch (e) {
