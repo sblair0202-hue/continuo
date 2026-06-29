@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sarahblair.continuo",
-     "infoPlist": {
+      "infoPlist": {
         "NSCameraUsageDescription": "Continuo uses the camera to capture field notes and documents.",
         "NSMicrophoneUsageDescription": "Continuo uses the microphone to record voice recaps.",
         "NSPhotoLibraryUsageDescription": "Continuo can access your photo library to attach images to field notes.",
@@ -50,7 +50,8 @@
         {
           "faceIDPermission": "Continuo uses Face ID to securely unlock your session."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "apiUrl": {

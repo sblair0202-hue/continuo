@@ -280,7 +280,7 @@ export default function AccountScreen() {
       api.createOpportunity({ ...fields, account_id: accountId }).then(created => {
         setLocalOpps(p => [created as Opportunity, ...p]);
       }).catch(() => {});
-    } else if (editingOpp && editingOpp !== 'new') {
+    } else if (editingOpp) {
       const oppId = (editingOpp as Opportunity).id;
       setLocalOpps(p => p.map(o => o.id === oppId ? { ...o, ...fields } : o));
       api.updateOpportunity(oppId, fields).catch(() => {});
@@ -303,7 +303,7 @@ export default function AccountScreen() {
       api.createMilestone({ ...fields, account_id: accountId, milestone_type: 'other' }).then(created => {
         setLocalMilestones(p => [...p, created as Milestone].sort((a, b) => a.date.localeCompare(b.date)));
       }).catch(() => {});
-    } else if (editingMilestone && editingMilestone !== 'new') {
+    } else if (editingMilestone) {
       const mId = (editingMilestone as Milestone).id;
       setLocalMilestones(p => p.map(m => m.id === mId ? { ...m, ...fields } : m));
       api.updateMilestone(mId, fields).catch(() => {});
@@ -327,7 +327,7 @@ export default function AccountScreen() {
       setEditingTask(null);
       return;
     }
-    if (editingTask && editingTask !== 'new') {
+    if (editingTask) {
       const task = editingTask as Task;
       setLocalTasks(p => p.map(t => t.id === task.id ? { ...t, ...fields, description: fields.notes } : t));
       api.updateTask(task.id, { ...fields, description: fields.notes }).catch(() => {});
