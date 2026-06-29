@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { api } from '../../src/api/client';
+import { Colors, sp } from '../../src/constants/colors';
 import type { Account, CalendarEvent, DailyBrief, MeetingPrep, Signal, Task } from '../../src/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -23,29 +24,29 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const doneTaskIds = new Set<number>();
 const dismissedSignalIds = new Set<number>();
 
-// ── Design tokens (oklch → hex) ─────────────────────────────────────────────
+// ── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  bg:         '#FAF9F7',
-  ink:        '#383530',
-  ink2:       '#6E6A63',
-  ink3:       '#9E9A94',
-  muted:      '#908D87',
-  eyebrow:    '#A29E98',
-  sectionDiv: '#E0DDD9',
-  rowDiv:     '#E9E6E3',
-  avatarBg:   '#EAE7E1',
-  avatarInk:  '#5C5853',
-  focusInk:   '#433F3A',
-  blue:       '#3A72C8',
-  green:      '#3D9E6A',
-  greenText:  '#389868',
-  orange:     '#C87A3D',
-  red:        '#C94530',
-  btnBg:      '#3D3A35',
-  dotPast:    '#C8C4BE',
-  dotDef:     '#C0BCB6',
-  rail:       '#E5E2DE',
-  prepText:   '#6B6559',
+  bg:         Colors.paper,
+  ink:        Colors.ink,
+  ink2:       Colors.graphite,
+  ink3:       Colors.stone,
+  muted:      Colors.graphite,
+  eyebrow:    Colors.graphite,
+  sectionDiv: Colors.mist,
+  rowDiv:     Colors.linen,
+  avatarBg:   Colors.linen,
+  avatarInk:  Colors.ink,
+  focusInk:   Colors.ink,
+  blue:       Colors.sky,
+  green:      Colors.sage,
+  greenText:  Colors.sage,
+  orange:     Colors.clay,
+  red:        Colors.rose,
+  btnBg:      Colors.inkDark,
+  dotPast:    Colors.stone,
+  dotDef:     Colors.stone,
+  rail:       Colors.mist,
+  prepText:   Colors.graphite,
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -388,7 +389,7 @@ function TLRow({ event, state, showRail, isOpen = false, prep, prepLoading = fal
 
   const timeColor   = isPast ? C.ink3 : C.ink;
   const titleColor  = isPast ? C.ink2 : C.ink;
-  const titleWeight = isNext ? ('600' as const) : ('500' as const);
+  const titleFont = isNext ? 'HankenGrotesk_600SemiBold' : 'HankenGrotesk_500Medium';
 
   const dot = isNext
     ? <View style={s.dotNext} />
@@ -408,7 +409,7 @@ function TLRow({ event, state, showRail, isOpen = false, prep, prepLoading = fal
       </View>
       <View style={s.tlContent}>
         <View style={s.tlTitleRow}>
-          <Text style={[s.tlTitle, { color: titleColor, fontWeight: titleWeight }]}>{event.title}</Text>
+          <Text style={[s.tlTitle, { color: titleColor, fontFamily: titleFont }]}>{event.title}</Text>
           {isNext && (
             <Animated.Text style={[s.chev, { transform: [{ rotate }] }]}>›</Animated.Text>
           )}
@@ -526,35 +527,35 @@ const s = StyleSheet.create({
   screen:      { flex: 1, backgroundColor: C.bg },
   center:      { justifyContent: 'center', alignItems: 'center' },
   scroll:      { paddingBottom: 40 },
-  loadingText: { fontSize: 14, color: C.ink3, fontFamily: 'System' },
+  loadingText: { fontSize: 14, color: C.ink3, fontFamily: 'HankenGrotesk_400Regular' },
 
   // Masthead
   masthead:    { paddingTop: 52, paddingBottom: 22, paddingHorizontal: 26 },
   mastheadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dateline:    { fontSize: 11, fontWeight: '600', color: C.muted, letterSpacing: 2.4, textTransform: 'uppercase' },
+  dateline:    { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.muted, letterSpacing: 2.4, textTransform: 'uppercase' },
   avatar:      { width: 28, height: 28, borderRadius: 14, backgroundColor: C.avatarBg, justifyContent: 'center', alignItems: 'center' },
-  avatarLabel: { fontSize: 12, fontWeight: '600', color: C.avatarInk },
-  lastUpdated: { marginTop: 6, fontSize: 11, color: C.ink3, fontWeight: '400' },
-  focusEyebrow:{ marginTop: 22, fontSize: 10, fontWeight: '600', color: C.eyebrow, letterSpacing: 2.8, textTransform: 'uppercase' },
-  focusDeck:   { marginTop: 11, fontSize: 22, fontFamily: 'Georgia', color: C.focusInk, lineHeight: 31.5, letterSpacing: -0.1 },
+  avatarLabel: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12, color: C.avatarInk },
+  lastUpdated: { marginTop: 6, fontSize: 11, color: C.ink3, fontFamily: 'HankenGrotesk_400Regular' },
+  focusEyebrow:{ marginTop: 22, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, color: C.eyebrow, letterSpacing: 2.8, textTransform: 'uppercase' },
+  focusDeck:   { marginTop: 11, fontSize: 22, fontFamily: 'Newsreader_400Regular_Italic', color: C.focusInk, lineHeight: 31.5, letterSpacing: -0.1 },
 
   divSection:  { height: 1, backgroundColor: C.sectionDiv, marginHorizontal: 26 },
   section:     { paddingHorizontal: 26, paddingTop: 26, paddingBottom: 2 },
-  eyebrow:     { fontSize: 11, fontWeight: '600', color: C.eyebrow, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 20 },
+  eyebrow:     { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.eyebrow, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 20 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginBottom: 4 },
-  countBadge:  { fontSize: 11, fontWeight: '600', color: C.muted },
-  emptyText:   { fontSize: 14, color: C.ink3, paddingBottom: 6 },
-  linkText:    { fontSize: 14, color: C.blue, paddingBottom: 6 },
-  calPrompt:   { backgroundColor: '#F5F3F0', borderRadius: 10, padding: 16, marginBottom: 6 },
-  calPromptTitle:{ fontSize: 14, fontWeight: '600', color: C.ink, marginBottom: 4 },
-  calPromptBody: { fontSize: 13, color: C.ink2, lineHeight: 18, marginBottom: 8 },
-  calPromptLink: { fontSize: 13, color: C.blue, fontWeight: '500' },
+  countBadge:  { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.muted },
+  emptyText:   { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.ink3, paddingBottom: 6 },
+  linkText:    { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.blue, paddingBottom: 6 },
+  calPrompt:   { backgroundColor: Colors.linen, borderRadius: 10, padding: 16, marginBottom: 6 },
+  calPromptTitle:{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: C.ink, marginBottom: 4 },
+  calPromptBody: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: C.ink2, lineHeight: 18, marginBottom: 8 },
+  calPromptLink: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 13, color: C.blue },
 
   // Timeline
   tlRow:       { flexDirection: 'row', gap: 15, paddingBottom: 18 },
   timeCol:     { width: 46, alignItems: 'flex-end', flexShrink: 0 },
-  timeH:       { fontSize: 13, fontWeight: '600' },
-  timeAp:      { fontSize: 10, fontWeight: '600', marginTop: 3 },
+  timeH:       { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13 },
+  timeAp:      { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, marginTop: 3 },
   railCol:     { width: 13, alignItems: 'center', flexShrink: 0 },
   rail:        { flex: 1, width: 1.5, backgroundColor: C.rail, marginTop: 4 },
   dotNext:     { width: 11, height: 11, borderRadius: 999, backgroundColor: C.blue, marginTop: 3,
@@ -562,42 +563,42 @@ const s = StyleSheet.create({
   dotHollow:   { width: 9, height: 9, borderRadius: 999, borderWidth: 2, backgroundColor: C.bg, marginTop: 4 },
   tlContent:   { flex: 1 },
   tlTitleRow:  { flexDirection: 'row', alignItems: 'flex-start' },
-  tlTitle:     { fontSize: 15.5, lineHeight: 20, flex: 1 },
-  tlSub:       { fontSize: 12.5, color: C.ink2, marginTop: 3, lineHeight: 18 },
+  tlTitle:     { fontFamily: 'HankenGrotesk_400Regular', fontSize: 15.5, lineHeight: 20, flex: 1 },
+  tlSub:       { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12.5, color: C.ink2, marginTop: 3, lineHeight: 18 },
   chev:        { fontSize: 22, color: C.ink3, lineHeight: 24, marginLeft: 6, marginTop: 1 },
   prepPanel:   { marginTop: 14, paddingBottom: 4 },
-  prepEyebrow: { fontSize: 10, fontWeight: '600', color: C.ink2, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 9 },
-  prepLine:    { fontSize: 15, fontFamily: 'Georgia', color: C.prepText, lineHeight: 22.5, paddingVertical: 2 },
+  prepEyebrow: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, color: C.ink2, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 9 },
+  prepLine:    { fontFamily: 'Newsreader_400Regular_Italic', fontSize: 15, color: C.prepText, lineHeight: 22.5, paddingVertical: 2 },
   prepDash:    { color: C.muted },
 
   // Now marker
   nowRow:  { flexDirection: 'row', gap: 15, alignItems: 'center', marginBottom: 10, marginTop: -4 },
-  nowH:    { fontSize: 11, fontWeight: '700', color: C.blue },
-  nowAp:   { fontSize: 9, fontWeight: '700', color: C.blue, marginTop: 2 },
+  nowH:    { fontFamily: 'HankenGrotesk_700Bold', fontSize: 11, color: C.blue },
+  nowAp:   { fontFamily: 'HankenGrotesk_700Bold', fontSize: 9, color: C.blue, marginTop: 2 },
   nowDot:  { width: 7, height: 7, borderRadius: 999, backgroundColor: C.blue },
   nowRest: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   nowLine: { flex: 1, height: 1.5, backgroundColor: C.blue, opacity: 0.42 },
-  nowLabel:{ fontSize: 10, fontWeight: '600', color: C.blue, letterSpacing: 1.5, textTransform: 'uppercase' },
+  nowLabel:{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, color: C.blue, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // Tasks
   taskRow:      { flexDirection: 'row', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.rowDiv, alignItems: 'flex-start' },
-  cb:           { width: 20, height: 20, borderRadius: 10, borderWidth: 1.7, borderColor: '#CCC8C3', marginTop: 1, flexShrink: 0 },
+  cb:           { width: 20, height: 20, borderRadius: 10, borderWidth: 1.7, borderColor: Colors.stone, marginTop: 1, flexShrink: 0 },
   cbDone:       { width: 20, height: 20, borderRadius: 10, backgroundColor: C.green, marginTop: 1, flexShrink: 0, justifyContent: 'center', alignItems: 'center' },
-  cbCheck:      { color: '#fff', fontSize: 11, fontWeight: '800' },
-  taskTitle:    { fontSize: 15.5, fontWeight: '500', color: C.ink, lineHeight: 22 },
+  cbCheck:      { color: Colors.reversed, fontSize: 11, fontFamily: 'HankenGrotesk_700Bold' },
+  taskTitle:    { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15.5, color: C.ink, lineHeight: 22 },
   taskTitleDone:{ color: C.ink3, textDecorationLine: 'line-through' },
-  taskMeta:     { marginTop: 3, fontSize: 12.5, fontWeight: '500', color: C.ink2, lineHeight: 18 },
+  taskMeta:     { marginTop: 3, fontFamily: 'HankenGrotesk_500Medium', fontSize: 12.5, color: C.ink2, lineHeight: 18 },
   overdue:      { color: C.red },
 
   // Signals
   sigRow:       { borderBottomWidth: 1, borderBottomColor: C.rowDiv, paddingVertical: 15 },
   sigMain:      { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   sigDot:       { width: 7, height: 7, borderRadius: 999, marginTop: 7, flexShrink: 0 },
-  sigTitle:     { fontSize: 15, fontWeight: '500', color: C.ink, lineHeight: 21 },
-  sigAcct:      { fontSize: 12.5, fontWeight: '500', color: C.ink2, marginTop: 2 },
+  sigTitle:     { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15, color: C.ink, lineHeight: 21 },
+  sigAcct:      { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12.5, color: C.ink2, marginTop: 2 },
   sigActions:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 13, paddingLeft: 19 },
   actionPill:   { backgroundColor: C.btnBg, paddingVertical: 9, paddingHorizontal: 15, borderRadius: 999 },
-  actionPillText:{ fontSize: 13, fontWeight: '600', color: '#fff' },
-  dismissText:  { fontSize: 13, fontWeight: '600', color: C.muted, paddingHorizontal: 6 },
-  sigDoneText:  { fontSize: 15, color: C.greenText, paddingVertical: 4 },
+  actionPillText:{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: Colors.reversed },
+  dismissText:  { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: C.muted, paddingHorizontal: 6 },
+  sigDoneText:  { fontFamily: 'HankenGrotesk_400Regular', fontSize: 15, color: C.greenText, paddingVertical: 4 },
 });

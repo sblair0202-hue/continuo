@@ -243,9 +243,9 @@ const s = StyleSheet.create({
     flex: 1, paddingVertical: 12, alignItems: 'center',
     borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
-  modeTabActive: { borderBottomColor: Colors.primary },
-  modeTabText: { fontSize: 14, fontWeight: '500', color: Colors.textSecondary },
-  modeTabTextActive: { color: Colors.primary, fontWeight: '600' },
+  modeTabActive: { borderBottomColor: Colors.sky },
+  modeTabText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 14, color: Colors.graphite },
+  modeTabTextActive: { fontFamily: 'HankenGrotesk_600SemiBold', color: Colors.sky },
 
   // Search input
   inputBar: {
@@ -262,7 +262,8 @@ const s = StyleSheet.create({
 
   // Section labels
   groupLabel: {
-    fontSize: 11, fontWeight: '600', color: Colors.textSecondary,
+    fontFamily: 'HankenGrotesk_600SemiBold',
+    fontSize: 11, color: Colors.graphite,
     letterSpacing: 0.6, textTransform: 'uppercase',
     marginTop: sp.lg, marginBottom: 6,
   },
@@ -274,31 +275,32 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2, elevation: 1,
     gap: sp.sm,
   },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  rowSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  rowHint: { fontSize: 12, color: Colors.primary, marginTop: 3 },
-  rowBadge: { fontSize: 12, fontWeight: '500' },
-  empty: { fontSize: 14, color: Colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: 40 },
+  rowTitle: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.ink },
+  rowSub: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: Colors.graphite, marginTop: 2 },
+  rowHint: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12, color: Colors.sky, marginTop: 3 },
+  rowBadge: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12 },
+  empty: { fontFamily: 'Newsreader_400Regular_Italic', fontSize: 14, color: Colors.graphite, textAlign: 'center', marginTop: 40 },
 
   // Ask mode
   askHeader: {
     backgroundColor: Colors.surface, padding: sp.md,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
   },
-  askHeaderTitle: { fontSize: 15, fontWeight: '600', color: Colors.text, marginBottom: 3 },
-  askHeaderSub: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
+  askHeaderTitle: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.ink, marginBottom: 3 },
+  askHeaderSub: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: Colors.graphite, lineHeight: 19 },
   askScroll: { padding: sp.md, flexGrow: 1 },
   thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: sp.sm, paddingVertical: sp.md },
-  thinkingText: { fontSize: 14, color: Colors.textSecondary },
+  thinkingText: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: Colors.graphite },
   answerBlock: {
     backgroundColor: Colors.surface2, borderRadius: 10, padding: sp.md, marginBottom: sp.md,
   },
   answerMeta: {
-    fontSize: 11, fontWeight: '600', color: Colors.textSecondary,
+    fontFamily: 'HankenGrotesk_600SemiBold',
+    fontSize: 11, color: Colors.graphite,
     letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: sp.sm,
   },
-  answerText: { fontSize: 15, color: Colors.text, lineHeight: 24 },
-  askPlaceholder: { fontSize: 14, color: Colors.textTertiary, textAlign: 'center', marginTop: 60 },
+  answerText: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 15, color: Colors.ink, lineHeight: 24 },
+  askPlaceholder: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: Colors.stone, textAlign: 'center', marginTop: 60 },
   askInputRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: sp.sm,
     padding: sp.md, backgroundColor: Colors.surface,
@@ -310,9 +312,9 @@ const s = StyleSheet.create({
     fontSize: 15, color: Colors.text, maxHeight: 100,
   },
   sendBtn: {
-    backgroundColor: Colors.primary, borderRadius: 10,
+    backgroundColor: Colors.sky, borderRadius: 10,
     paddingHorizontal: sp.md, paddingVertical: sp.sm + 2,
   },
   sendBtnDisabled: { opacity: 0.35 },
-  sendBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  sendBtnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.reversed },
 });

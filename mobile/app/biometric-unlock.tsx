@@ -8,7 +8,9 @@ import {
   View,
 } from 'react-native';
 
+import { Logo } from '../src/components/Logo';
 import { useAuth } from '../src/context/AuthContext';
+import { Colors, sp } from '../src/constants/colors';
 
 export default function BiometricUnlockScreen() {
   const { user, unlockWithBiometric, skipBiometric } = useAuth();
@@ -24,7 +26,6 @@ export default function BiometricUnlockScreen() {
         setBiometricType('fingerprint');
       }
     });
-    // Prompt immediately on mount
     handleUnlock();
   }, []);
 
@@ -44,8 +45,10 @@ export default function BiometricUnlockScreen() {
   return (
     <View style={s.screen}>
       <View style={s.inner}>
-        <Text style={s.wordmark}>Continuo</Text>
-        <Text style={s.welcome}>Welcome back{user?.display_name ? `, ${user.display_name}` : ''}</Text>
+        <Logo variant="full" scheme="default" size={48} />
+        <Text style={s.welcome}>
+          Welcome back{user?.display_name ? `, ${user.display_name}` : ''}
+        </Text>
 
         <TouchableOpacity style={s.iconWrap} onPress={handleUnlock} activeOpacity={0.7}>
           <Text style={s.icon}>{icon}</Text>
@@ -63,35 +66,24 @@ export default function BiometricUnlockScreen() {
   );
 }
 
-const C = {
-  bg: '#FAF9F7',
-  ink: '#383530',
-  ink2: '#6E6A63',
-  ink3: '#9E9A94',
-  muted: '#B0ABA4',
-  blue: '#3A72C8',
-  red: '#C94530',
-};
-
 const s = StyleSheet.create({
-  screen:   { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
+  screen:   { flex: 1, backgroundColor: Colors.paper, justifyContent: 'center', alignItems: 'center' },
   inner:    { alignItems: 'center', paddingHorizontal: 40 },
-  wordmark: { fontSize: 30, fontFamily: 'Georgia', color: C.ink, letterSpacing: -0.3, marginBottom: 8 },
-  welcome:  { fontSize: 16, color: C.ink2, marginBottom: 52 },
+  welcome:  { fontFamily: 'HankenGrotesk_400Regular', fontSize: 16, color: Colors.graphite, marginTop: sp.md, marginBottom: sp.xxl },
   iconWrap: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#F0EDE9',
+    backgroundColor: Colors.linen,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: sp.md,
     borderWidth: 1,
-    borderColor: '#E0DDD9',
+    borderColor: Colors.mist,
   },
   icon:     { fontSize: 38 },
-  hint:     { fontSize: 14, color: C.ink3, marginBottom: 20 },
-  error:    { fontSize: 13, color: C.red, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
-  altBtn:   { marginTop: 32, paddingVertical: 10, paddingHorizontal: 20 },
-  altText:  { fontSize: 15, color: C.blue, fontWeight: '500' },
+  hint:     { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: Colors.stone, marginBottom: sp.lg },
+  error:    { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: Colors.rose, textAlign: 'center', marginBottom: sp.md, lineHeight: 18 },
+  altBtn:   { marginTop: sp.xl, paddingVertical: 10, paddingHorizontal: 20 },
+  altText:  { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15, color: Colors.sky },
 });

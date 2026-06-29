@@ -39,6 +39,8 @@ export default function ReviewScreen() {
     signals: extraction.signals.map(() => true),
     tasks: extraction.tasks.map(() => true),
   });
+  // deferred[i] = true means "save as new (show on home screen later)"
+  const [deferred, setDeferred] = useState<boolean[]>(extraction.signals.map(() => false));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -60,6 +62,10 @@ export default function ReviewScreen() {
     });
   }
 
+  function toggleDefer(i: number) {
+    setDeferred(prev => { const next = [...prev]; next[i] = !next[i]; return next; });
+  }
+
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
@@ -67,7 +73,11 @@ export default function ReviewScreen() {
       ...extraction,
       accounts: extraction.accounts.filter((_, i) => review.accounts[i]),
       contacts: extraction.contacts.filter((_, i) => review.contacts[i]),
-      signals: extraction.signals.filter((_, i) => review.signals[i]),
+      signals: extraction.signals.flatMap((sig, i) =>
+        review.signals[i]
+          ? [{ ...sig, status: deferred[i] ? 'new' : 'accepted' }]
+          : []
+      ),
       tasks: extraction.tasks.filter((_, i) => review.tasks[i]),
     };
     try {
@@ -106,8 +116,10 @@ export default function ReviewScreen() {
         ))}
 
         <SectionHeader title="Signals" prominent />
+        <Text style={styles.signalHint}>Swipe to remove · Tap "Defer" to review later on Home</Text>
         {extraction.signals.map((signal, i) => {
           const tc = signalTypeColors(signal.signal_type);
+          const isDeferred = deferred[i];
           return (
             <SwipeableRow
               key={i}
@@ -127,6 +139,14 @@ export default function ReviewScreen() {
                     {IMPACT_LABEL[signal.impact_level] ?? signal.impact_level.toUpperCase()}
                   </Text>
                 </View>
+                <TouchableOpacity
+                  style={[styles.deferBtn, isDeferred && styles.deferBtnActive]}
+                  onPress={() => toggleDefer(i)}
+                >
+                  <Text style={[styles.deferBtnText, isDeferred && styles.deferBtnTextActive]}>
+                    {isDeferred ? '⏰ Deferred' : 'Defer'}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <Text style={[styles.itemTitle, !review.signals[i] && styles.rejected]}>
                 {signal.title}
@@ -358,4 +378,16 @@ const styles = StyleSheet.create({
   saveButtonDisabled: { opacity: 0.6 },
   saveText: { color: Colors.surface, fontSize: 16, fontWeight: '700' },
   bottomSpacer: { height: 20 },
+  signalHint: { fontSize: 12, color: Colors.textSecondary, marginBottom: 8, marginTop: -4 },
+  deferBtn: {
+    marginLeft: 'auto',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  deferBtnActive: { backgroundColor: '#FFF3E0', borderColor: '#E67E22' },
+  deferBtnText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
+  deferBtnTextActive: { color: '#E67E22' },
 });

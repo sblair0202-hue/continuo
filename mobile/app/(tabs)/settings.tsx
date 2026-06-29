@@ -13,6 +13,7 @@ import {
 
 import { useAuth } from '../../src/context/AuthContext';
 import { API_BASE_URL } from '../../src/api/client';
+import { Colors } from '../../src/constants/colors';
 
 export default function SettingsScreen() {
   const { user, logout, biometricAvailable } = useAuth();
@@ -76,14 +77,14 @@ export default function SettingsScreen() {
             label="Google Calendar"
             statusLabel={calStatus.label}
             statusColor={calStatus.color}
-            onConnect={() => Alert.alert('Connect Calendar', 'Open http://localhost:8000/calendar/connect in your browser to connect Google Calendar.')}
+            onConnect={() => Alert.alert('Connect Calendar', `Open ${API_BASE_URL}/calendar/connect in your browser to connect Google Calendar.`)}
           />
           <RowDiv />
           <IntegrationRow
             label="Gmail"
             statusLabel={emailStatus.label}
             statusColor={emailStatus.color}
-            onConnect={() => Alert.alert('Connect Gmail', 'Open http://localhost:8000/email/connect in your browser to connect Gmail.')}
+            onConnect={() => Alert.alert('Connect Gmail', `Open ${API_BASE_URL}/email/connect in your browser to connect Gmail.`)}
           />
           <RowDiv />
           <IntegrationRow
@@ -231,19 +232,19 @@ function IntegrationRow({
 }
 
 const C = {
-  bg: '#FAF9F7',
-  ink: '#383530',
-  ink2: '#6E6A63',
-  ink3: '#9E9A94',
-  muted: '#9E9A94',
-  eyebrow: '#A29E98',
-  border: '#E0DDD9',
-  rowDiv: '#EFECE9',
-  card: '#FFFFFF',
-  blue: '#3A72C8',
-  green: '#3D9E6A',
-  red: '#C94530',
-  orange: '#C87A3D',
+  bg:      Colors.paper,
+  ink:     Colors.ink,
+  ink2:    Colors.graphite,
+  ink3:    Colors.stone,
+  muted:   Colors.graphite,
+  eyebrow: Colors.graphite,
+  border:  Colors.mist,
+  rowDiv:  Colors.linen,
+  card:    Colors.surface,
+  blue:    Colors.sky,
+  green:   Colors.sage,
+  red:     Colors.rose,
+  orange:  Colors.clay,
 };
 
 const s = StyleSheet.create({
@@ -251,21 +252,21 @@ const s = StyleSheet.create({
   scroll: { paddingTop: 16, paddingHorizontal: 20 },
 
   section:  { marginBottom: 28 },
-  eyebrow:  { fontSize: 11, fontWeight: '600', color: C.eyebrow, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 10, paddingLeft: 4 },
+  eyebrow:  { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.eyebrow, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 10, paddingLeft: 4 },
 
   card:     { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   row:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 15 },
   switchRow:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   rowDiv:   { height: 1, backgroundColor: C.rowDiv, marginLeft: 16 },
-  rowLabel: { fontSize: 15, color: C.ink, fontWeight: '400' },
-  rowValue: { fontSize: 14, color: C.ink3 },
+  rowLabel: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 15, color: C.ink },
+  rowValue: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.ink3 },
   chev:     { fontSize: 20, color: C.muted, lineHeight: 22 },
 
-  comingSoonBadge: { backgroundColor: '#F0EDE9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  comingSoonText:  { fontSize: 11, color: C.muted, fontWeight: '500' },
+  comingSoonBadge: { backgroundColor: Colors.linen, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  comingSoonText:  { fontFamily: 'HankenGrotesk_500Medium', fontSize: 11, color: C.muted },
 
   logoutBtn: {
-    backgroundColor: '#F0EDE9',
+    backgroundColor: Colors.linen,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
@@ -273,10 +274,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  logoutText:  { fontSize: 15, fontWeight: '600', color: C.ink },
+  logoutText:  { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: C.ink },
   deleteBtn:   { paddingVertical: 10, alignItems: 'center' },
-  deleteText:  { fontSize: 14, color: C.red, fontWeight: '400' },
+  deleteText:  { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.red },
 
-  version:    { textAlign: 'center', fontSize: 12, color: C.muted, marginBottom: 6 },
-  phiWarning: { textAlign: 'center', fontSize: 11, color: C.orange, lineHeight: 16, paddingHorizontal: 20 },
+  version:    { fontFamily: 'HankenGrotesk_400Regular', textAlign: 'center', fontSize: 12, color: C.muted, marginBottom: 6 },
+  phiWarning: { fontFamily: 'HankenGrotesk_400Regular', textAlign: 'center', fontSize: 11, color: C.orange, lineHeight: 16, paddingHorizontal: 20 },
 });

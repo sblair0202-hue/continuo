@@ -10,21 +10,20 @@ import {
 } from 'react-native';
 
 import { api } from '../../src/api/client';
+import { Colors } from '../../src/constants/colors';
 import type { Account, Signal } from '../../src/types';
 
-// ── Design tokens (shared with home) ────────────────────────────────────────
 const C = {
-  bg:         '#FAF9F7',
-  ink:        '#383530',
-  ink2:       '#6E6A63',
-  ink3:       '#9E9A94',
-  muted:      '#908D87',
-  eyebrow:    '#A29E98',
-  rowDiv:     '#E9E6E3',
-  blue:       '#3A72C8',
-  green:      '#3D9E6A',
-  orange:     '#C87A3D',
-  red:        '#C94530',
+  bg:     Colors.paper,
+  ink:    Colors.ink,
+  ink2:   Colors.graphite,
+  ink3:   Colors.stone,
+  muted:  Colors.graphite,
+  rowDiv: Colors.linen,
+  blue:   Colors.sky,
+  green:  Colors.sage,
+  orange: Colors.clay,
+  red:    Colors.rose,
 };
 
 function momentumColor(m: string): string {
@@ -145,22 +144,22 @@ const s = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingTop: 20, paddingBottom: 16,
   },
-  headerCount:  { fontSize: 12, color: C.muted, fontWeight: '500' },
-  filterActive: { fontSize: 12, fontWeight: '600', color: C.blue },
-  referralLink: { fontSize: 12, color: C.muted, fontWeight: '500' },
+  headerCount:  { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12, color: C.muted },
+  filterActive: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12, color: C.blue },
+  referralLink: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12, color: C.muted },
 
   list:      { borderTopWidth: 1, borderTopColor: C.rowDiv },
   row:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 14 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.rowDiv },
   rowLeft:   { flex: 1 },
 
-  name:       { fontSize: 15.5, fontWeight: '600', color: C.ink, lineHeight: 22 },
-  sub:        { fontSize: 12.5, color: C.ink3, marginTop: 2, lineHeight: 18 },
-  nextAction: { fontSize: 13, color: C.ink2, marginTop: 5, lineHeight: 19 },
+  name:       { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15.5, color: C.ink, lineHeight: 22 },
+  sub:        { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12.5, color: C.ink3, marginTop: 2, lineHeight: 18 },
+  nextAction: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: C.ink2, marginTop: 5, lineHeight: 19 },
   dot:        { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
 
   empty:     { marginTop: 80, alignItems: 'center', paddingHorizontal: 32 },
-  emptyTitle:{ fontSize: 16, fontWeight: '600', color: C.ink, textAlign: 'center', marginBottom: 8 },
-  emptySub:  { fontSize: 14, color: C.ink3, textAlign: 'center', lineHeight: 22 },
-  errorText: { fontSize: 13, color: C.red, marginBottom: 12 },
+  emptyTitle:{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 16, color: C.ink, textAlign: 'center', marginBottom: 8 },
+  emptySub:  { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.ink3, textAlign: 'center', lineHeight: 22 },
+  errorText: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: C.red, marginBottom: 12 },
 });
