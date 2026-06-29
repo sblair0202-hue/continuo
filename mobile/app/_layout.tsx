@@ -20,6 +20,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { OrbProvider } from '../src/context/OrbContext';
 import { Colors } from '../src/constants/colors';
 
 function RootNavigator() {
@@ -92,10 +93,12 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar style="dark" />
-        <RootNavigator />
-      </GestureHandlerRootView>
+      <OrbProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <StatusBar style="dark" />
+          <RootNavigator />
+        </GestureHandlerRootView>
+      </OrbProvider>
     </AuthProvider>
   );
 }

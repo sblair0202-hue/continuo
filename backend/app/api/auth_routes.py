@@ -22,10 +22,11 @@ _GOOGLE_AUTH_REDIRECT_URI = _os.getenv(
     "GOOGLE_AUTH_REDIRECT_URI",
     "http://localhost:8000/auth/google-callback",
 )
+# Web app credentials (NOT the Desktop/iOS credential — must be "Web application" type in Google Cloud)
 _GOOGLE_AUTH_CONFIG = {
     "web": {
-        "client_id": _os.getenv("GOOGLE_CLIENT_ID", ""),
-        "client_secret": _os.getenv("GOOGLE_CLIENT_SECRET", ""),
+        "client_id": _os.getenv("GOOGLE_WEB_CLIENT_ID") or _os.getenv("GOOGLE_CLIENT_ID", ""),
+        "client_secret": _os.getenv("GOOGLE_WEB_CLIENT_SECRET") or _os.getenv("GOOGLE_CLIENT_SECRET", ""),
         "redirect_uris": [_GOOGLE_AUTH_REDIRECT_URI],
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",

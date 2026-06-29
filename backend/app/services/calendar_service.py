@@ -11,8 +11,8 @@ SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 CLIENT_CONFIG = {
     "web": {
-        "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+        "client_id": os.getenv("GOOGLE_WEB_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID", ""),
+        "client_secret": os.getenv("GOOGLE_WEB_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET", ""),
         "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/calendar/callback")],
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
@@ -47,8 +47,8 @@ def _build_credentials(token_row) -> Credentials:
         token=token_row.access_token,
         refresh_token=token_row.refresh_token,
         token_uri=token_row.token_uri or "https://oauth2.googleapis.com/token",
-        client_id=os.getenv("GOOGLE_CLIENT_ID", ""),
-        client_secret=os.getenv("GOOGLE_CLIENT_SECRET", ""),
+        client_id=os.getenv("GOOGLE_WEB_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID", ""),
+        client_secret=os.getenv("GOOGLE_WEB_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET", ""),
         scopes=scopes,
     )
     if token_row.expiry:
