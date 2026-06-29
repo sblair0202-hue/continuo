@@ -3,8 +3,9 @@ load_dotenv()
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.auth_routes import router as auth_router
 from app.api.routes import router
@@ -57,6 +58,11 @@ app.include_router(opportunity_router)
 app.include_router(milestone_router)
 app.include_router(activity_history_router)
 app.include_router(intelligence_router)
+
+
+@app.exception_handler(RuntimeError)
+async def runtime_error_handler(request: Request, exc: RuntimeError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @app.get("/")

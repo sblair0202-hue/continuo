@@ -19,7 +19,10 @@ _client: anthropic.Anthropic | None = None
 def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        key = os.getenv("ANTHROPIC_API_KEY")
+        if not key:
+            raise RuntimeError("AI features are not configured. Contact your administrator.")
+        _client = anthropic.Anthropic(api_key=key)
     return _client
 
 
