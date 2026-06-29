@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   AppState,
   Linking,
@@ -13,7 +14,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { API_BASE_URL } from '../../src/api/client';
+import { api, API_BASE_URL } from '../../src/api/client';
 import { Colors } from '../../src/constants/colors';
 
 export default function SettingsScreen() {
@@ -21,6 +22,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [calConnected, setCalConnected] = useState<boolean | null>(null);
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null);
+  const [notionConnected, setNotionConnected] = useState<boolean | null>(null);
+  const [notionImporting, setNotionImporting] = useState(false);
 
   function refreshStatuses() {
     fetch(`${API_BASE_URL}/calendar/status`)
@@ -31,6 +34,25 @@ export default function SettingsScreen() {
       .then(r => r.json())
       .then(d => setEmailConnected(d.connected))
       .catch(() => setEmailConnected(false));
+    api.getNotionStatus()
+      .then(d => setNotionConnected(d.connected))
+      .catch(() => setNotionConnected(false));
+  }
+
+  async function handleNotionImport() {
+    setNotionImporting(true);
+    try {
+      const result = await api.notionImport();
+      Alert.alert(
+        'Notion Import Complete',
+        `Imported ${result.imported} accounts, skipped ${result.skipped} already in the app (${result.total_in_notion} total in Notion).`,
+        [{ text: 'OK' }]
+      );
+    } catch (e) {
+      Alert.alert('Import Failed', e instanceof Error ? e.message : 'Could not import from Notion. Make sure NOTION_TOKEN and NOTION_DATABASE_ID are set in Railway.');
+    } finally {
+      setNotionImporting(false);
+    }
   }
 
   useEffect(() => {
@@ -104,14 +126,15 @@ export default function SettingsScreen() {
             )}
           />
           <RowDiv />
-          <IntegrationRow
-            label="Salesforce"
-            statusLabel="Coming soon"
-            statusColor={C.muted}
+          <RowDiv />
+          <NotionRow
+            connected={notionConnected}
+            importing={notionImporting}
+            onImport={handleNotionImport}
           />
           <RowDiv />
           <IntegrationRow
-            label="Notion"
+            label="Salesforce"
             statusLabel="Coming soon"
             statusColor={C.muted}
           />
@@ -219,6 +242,39 @@ function RowDiv() {
   return <View style={s.rowDiv} />;
 }
 
+function NotionRow({
+  connected,
+  importing,
+  onImport,
+}: {
+  connected: boolean | null;
+  importing: boolean;
+  onImport: () => void;
+}) {
+  const statusLabel = connected === null ? '…' : connected ? 'Configured' : 'Not connected';
+  const statusColor = connected ? C.green : C.muted;
+
+  return (
+    <View style={s.row}>
+      <Text style={s.rowLabel}>Notion</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={[s.rowValue, { color: statusColor }]}>{statusLabel}</Text>
+        <TouchableOpacity
+          style={[s.notionImportBtn, importing && { opacity: 0.6 }]}
+          onPress={onImport}
+          disabled={importing}
+          activeOpacity={0.7}
+        >
+          {importing
+            ? <ActivityIndicator size="small" color={Colors.sky} />
+            : <Text style={s.notionImportText}>Import</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 function IntegrationRow({
   label,
   statusLabel,
@@ -294,6 +350,17 @@ const s = StyleSheet.create({
   logoutText:  { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: C.ink },
   deleteBtn:   { paddingVertical: 10, alignItems: 'center' },
   deleteText:  { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.red },
+
+  notionImportBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.sky,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  notionImportText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: Colors.sky },
 
   version:    { fontFamily: 'HankenGrotesk_400Regular', textAlign: 'center', fontSize: 12, color: C.muted, marginBottom: 6 },
   phiWarning: { fontFamily: 'HankenGrotesk_400Regular', textAlign: 'center', fontSize: 11, color: C.orange, lineHeight: 16, paddingHorizontal: 20 },

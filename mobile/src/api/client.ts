@@ -127,6 +127,11 @@ export const api = {
   extractEmailSignals: () => request<EmailExtractionResult>('/email/extract-signals', { method: 'POST' }),
   getNotionStatus: () => request<NotionStatus>('/notion/status'),
   notionSync: () => request<NotionSyncResult>('/notion/sync', { method: 'POST' }),
+  notionImport: (databaseId?: string) =>
+    request<{ imported: number; skipped: number; total_in_notion: number }>(
+      `/notion/import${databaseId ? `?database_id=${databaseId}` : ''}`,
+      { method: 'POST', timeoutMs: 30000 }
+    ),
 
   // Opportunities
   getOpportunities: (accountId?: number) =>
