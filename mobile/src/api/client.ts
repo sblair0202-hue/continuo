@@ -104,6 +104,20 @@ export const api = {
       `/voice-journal/${id}/approve`,
       { method: 'POST', body: JSON.stringify({ extraction }) }
     ),
+  saveForLater: (id: number) =>
+    request<{ status: string; voice_journal_entry_id: number }>(
+      `/voice-journal/${id}/save-for-later`,
+      { method: 'POST' }
+    ),
+  getReviewQueue: () =>
+    request<Array<{ id: number; transcript: string; ai_summary: string | null; source: string; created_at: string }>>(
+      '/voice-journal/queue'
+    ),
+  transcribeAudio: (audioBase64: string, format: string) =>
+    request<{ transcript: string }>(
+      '/transcribe',
+      { method: 'POST', body: JSON.stringify({ audio_base64: audioBase64, format }), timeoutMs: 60000 }
+    ),
   getCalendarStatus: () => request<{ connected: boolean }>('/calendar/status'),
   getTodayEvents: () => request<CalendarEvent[]>('/calendar/today'),
   getMeetingPrep: (eventId: string, accountId?: number) =>

@@ -34,7 +34,21 @@ try:
             _conn.execute(_text("ALTER TABLE users ADD COLUMN oauth_id VARCHAR"))
         _conn.commit()
 except Exception:
-    pass  # Table may not exist yet on first run; create_all handles it
+    pass
+
+try:
+    from sqlalchemy import inspect as _insp2, text as _text2
+    _vj_cols = [c["name"] for c in _insp2(engine).get_columns("voice_journal_entries")]
+    with engine.connect() as _conn2:
+        if "source" not in _vj_cols:
+            _conn2.execute(_text2("ALTER TABLE voice_journal_entries ADD COLUMN source VARCHAR DEFAULT 'typed'"))
+        if "status" not in _vj_cols:
+            _conn2.execute(_text2("ALTER TABLE voice_journal_entries ADD COLUMN status VARCHAR DEFAULT 'pending_review'"))
+        if "ai_extraction_json" not in _vj_cols:
+            _conn2.execute(_text2("ALTER TABLE voice_journal_entries ADD COLUMN ai_extraction_json TEXT"))
+        _conn2.commit()
+except Exception:
+    pass
 
 
 @asynccontextmanager

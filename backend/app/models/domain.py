@@ -82,8 +82,13 @@ class VoiceJournalEntry(Base):
     user_id = Column(String, nullable=False)
     transcript = Column(Text, nullable=False)
     ai_summary = Column(Text, nullable=True)
+    ai_extraction_json = Column(Text, nullable=True)  # raw JSON for drafts
     reviewed = Column(Boolean, default=False)
     approved = Column(Boolean, default=False)
+    # source: voice | typed | photo
+    source = Column(String, default="typed")
+    # status: pending_review | saved | discarded
+    status = Column(String, default="pending_review")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

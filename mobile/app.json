@@ -67,7 +67,13 @@
       ],
       "expo-font",
       "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Continuo uses the microphone to record voice recaps."
+        }
+      ]
     ],
     "extra": {
       "apiUrl": {

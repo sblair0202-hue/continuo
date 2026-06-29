@@ -61,6 +61,7 @@ export default function ReviewScreen() {
     return e.signals.map(() => false);
   });
   const [saving, setSaving] = useState(false);
+  const [savingLater, setSavingLater] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [tasksExpanded, setTasksExpanded] = useState(false);
@@ -134,6 +135,18 @@ export default function ReviewScreen() {
       setSaveError(e instanceof Error ? e.message : 'Save failed.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveLater() {
+    setSavingLater(true);
+    setSaveError(null);
+    try {
+      await api.saveForLater(Number(id));
+      router.replace('/');
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Could not save for later.');
+      setSavingLater(false);
     }
   }
 
@@ -280,17 +293,30 @@ export default function ReviewScreen() {
 
       <View style={styles.footer}>
         {saveError && <Text style={styles.errorText}>{saveError}</Text>}
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color={Colors.surface} />
-          ) : (
-            <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save Memory'}</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.footerRow}>
+          <TouchableOpacity
+            style={[styles.saveLaterButton, savingLater && styles.saveButtonDisabled]}
+            onPress={handleSaveLater}
+            disabled={saving || savingLater}
+          >
+            {savingLater ? (
+              <ActivityIndicator color={Colors.graphite} size="small" />
+            ) : (
+              <Text style={styles.saveLaterText}>Save for Later</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.saveButton, styles.saveButtonFlex, saving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saving || savingLater}
+          >
+            {saving ? (
+              <ActivityIndicator color={Colors.surface} />
+            ) : (
+              <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save Memory'}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {editTarget && (
@@ -657,12 +683,24 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   errorText: { color: Colors.high, fontSize: 13, marginBottom: 8, textAlign: 'center' },
+  footerRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  saveLaterButton: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.paper,
+  },
+  saveLaterText: { color: Colors.graphite, fontSize: 14, fontWeight: '600' },
   saveButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
+  saveButtonFlex: { flex: 1 },
   saveButtonDisabled: { opacity: 0.6 },
   saveText: { color: Colors.surface, fontSize: 16, fontWeight: '700' },
   bottomSpacer: { height: 20 },

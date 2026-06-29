@@ -89,7 +89,7 @@ export default function TabLayout() {
       <QuickActionsSheet
         visible={showQuickActions}
         onClose={() => setShowQuickActions(false)}
-        onSelectVoiceNote={() => { setShowQuickActions(false); openCapture(); }}
+        onSelectVoiceNote={() => { setShowQuickActions(false); router.push('/voice-capture'); }}
         onSelectQuickNote={() => { setShowQuickActions(false); openCapture(); }}
         onSelectPhoto={() => { setShowQuickActions(false); openCapture(); }}
       />

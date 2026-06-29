@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -168,11 +169,11 @@ export default function NewRecapScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonDisabled]}
-            onPress={() => Alert.alert('Coming soon', 'Voice recording will be available in a future update.')}
+            style={styles.actionButton}
+            onPress={() => router.push('/voice-capture')}
           >
-            <Text style={styles.actionIcon}>🎤</Text>
-            <Text style={styles.actionLabel}>Voice (coming soon)</Text>
+            <Text style={styles.actionIcon}>🎙</Text>
+            <Text style={styles.actionLabel}>Voice note</Text>
           </TouchableOpacity>
         </View>
 

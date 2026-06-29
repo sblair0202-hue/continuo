@@ -42,6 +42,61 @@ def list_recent_voice_journals(db: Session = Depends(get_db)):
     return [{"id": e.id, "reviewed": e.reviewed, "approved": e.approved, "created_at": str(e.created_at)} for e in entries]
 
 
+@router.get("/voice-journal/queue")
+def get_review_queue(db: Session = Depends(get_db)):
+    """Return captures saved for later review (not yet approved)."""
+    entries = (
+        db.query(VoiceJournalEntry)
+        .filter(VoiceJournalEntry.status == "pending_review", VoiceJournalEntry.approved == False)
+        .order_by(VoiceJournalEntry.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": e.id,
+            "transcript": e.transcript[:200],
+            "ai_summary": e.ai_summary,
+            "source": e.source,
+            "created_at": str(e.created_at),
+        }
+        for e in entries
+    ]
+
+
+@router.post("/transcribe")
+def transcribe_audio(payload: dict):
+    """Transcribe base64-encoded audio using OpenAI Whisper."""
+    import base64, tempfile, os as _os
+    audio_b64 = payload.get("audio_base64", "")
+    audio_format = payload.get("format", "m4a")
+    if not audio_b64:
+        raise HTTPException(status_code=400, detail="audio_base64 is required")
+
+    openai_key = _os.getenv("OPENAI_API_KEY", "")
+    if not openai_key:
+        raise HTTPException(status_code=503, detail="Transcription is not configured. Add OPENAI_API_KEY to Railway settings.")
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_key)
+        audio_bytes = base64.b64decode(audio_b64)
+        with tempfile.NamedTemporaryFile(suffix=f".{audio_format}", delete=False) as f:
+            f.write(audio_bytes)
+            tmp_path = f.name
+        try:
+            with open(tmp_path, "rb") as audio_file:
+                result = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en",
+                )
+            return {"transcript": result.text}
+        finally:
+            _os.unlink(tmp_path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
+
+
 @router.post("/extract-from-image")
 def extract_from_image(payload: dict):
     image_base64 = payload.get("image_base64", "")
@@ -75,6 +130,18 @@ def create_voice_journal(payload: VoiceJournalCreate, db: Session = Depends(get_
         transcript=entry.transcript,
         extraction_preview=extraction,
     )
+
+
+@router.post("/voice-journal/{entry_id}/save-for-later")
+def save_for_later(entry_id: int, db: Session = Depends(get_db)):
+    """Mark entry as pending review without committing extracted objects."""
+    entry = db.query(VoiceJournalEntry).filter(VoiceJournalEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Voice journal entry not found")
+    entry.status = "pending_review"
+    entry.reviewed = False
+    db.commit()
+    return {"status": "saved_for_later", "voice_journal_entry_id": entry.id}
 
 
 @router.post("/voice-journal/{entry_id}/approve")
@@ -199,6 +266,7 @@ def approve_voice_journal(
 
     entry.reviewed = True
     entry.approved = True
+    entry.status = "saved"
     db.add(entry)
     db.commit()
 

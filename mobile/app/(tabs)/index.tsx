@@ -119,6 +119,7 @@ export default function TodayScreen() {
   const [schedOpen, setSchedOpen]       = useState<Record<string, boolean>>({});
   const [prep, setPrep]                 = useState<Record<string, MeetingPrep>>({});
   const [prepLoading, setPrepLoading]   = useState<Record<string, boolean>>({});
+  const [queueCount, setQueueCount]     = useState(0);
 
   const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
@@ -130,7 +131,8 @@ export default function TodayScreen() {
       api.getAccounts(),
       api.getCalendarStatus().catch(() => ({ connected: false })),
       api.getDailyBrief().catch(() => null),
-    ]).then(([sigR, taskR, accR, calR, briefR]) => {
+      api.getReviewQueue().catch(() => []),
+    ]).then(([sigR, taskR, accR, calR, briefR, queueR]) => {
       if (sigR.status === 'fulfilled')   setSignals(sigR.value);
       if (taskR.status === 'fulfilled')  setTasks(taskR.value);
       if (accR.status === 'fulfilled')   setAccounts(accR.value);
@@ -140,6 +142,7 @@ export default function TodayScreen() {
         if (connected) api.getTodayEvents().then(setMeetings).catch(() => {});
       }
       if (briefR.status === 'fulfilled' && briefR.value) setBrief(briefR.value);
+      if (queueR.status === 'fulfilled') setQueueCount((queueR.value as unknown[]).length);
     }).finally(() => { setLoading(false); setRefreshing(false); setLastUpdated(new Date()); });
   }
 
@@ -277,6 +280,20 @@ export default function TodayScreen() {
           <Text style={s.focusEyebrow}>Today's focus</Text>
           <Text style={s.focusDeck}>{focusStatement}</Text>
         </View>
+        {queueCount > 0 && (
+          <TouchableOpacity
+            style={s.queueBanner}
+            onPress={() => router.push('/review-queue' as never)}
+            activeOpacity={0.8}
+          >
+            <Text style={s.queueBannerIcon}>🎙</Text>
+            <Text style={s.queueBannerText}>
+              {queueCount === 1 ? '1 recap saved for later' : `${queueCount} recaps saved for later`}
+            </Text>
+            <Text style={s.queueBannerArrow}>→</Text>
+          </TouchableOpacity>
+        )}
+
         <View style={s.divSection} />
 
         {/* ── TODAY timeline ── */}
@@ -538,6 +555,24 @@ const s = StyleSheet.create({
   lastUpdated: { marginTop: 6, fontSize: 11, color: C.ink3, fontFamily: 'HankenGrotesk_400Regular' },
   focusEyebrow:{ marginTop: 22, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, color: C.eyebrow, letterSpacing: 2.8, textTransform: 'uppercase' },
   focusDeck:   { marginTop: 11, fontSize: 22, fontFamily: 'Newsreader_400Regular_Italic', color: C.focusInk, lineHeight: 31.5, letterSpacing: -0.1 },
+
+  // Review Queue banner
+  queueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 26,
+    marginTop: 14,
+    backgroundColor: Colors.clayTint,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Colors.clay,
+  },
+  queueBannerIcon:  { fontSize: 16 },
+  queueBannerText:  { flex: 1, fontFamily: 'HankenGrotesk_500Medium', fontSize: 13, color: Colors.ink },
+  queueBannerArrow: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.clay },
 
   divSection:  { height: 1, backgroundColor: C.sectionDiv, marginHorizontal: 26 },
   section:     { paddingHorizontal: 26, paddingTop: 26, paddingBottom: 2 },
