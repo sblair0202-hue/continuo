@@ -6,6 +6,11 @@
     "scheme": "continuo",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F9F6F2"
+    },
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
@@ -28,7 +33,7 @@
       "package": "com.sarahblair.continuo",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#EDF3F8",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
