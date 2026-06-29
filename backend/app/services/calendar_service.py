@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 CLIENT_CONFIG = {
-    "installed": {
+    "web": {
         "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
         "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
         "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/calendar/callback")],

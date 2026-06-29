@@ -14,7 +14,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 REDIRECT_URI = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8000/email/callback")
 
 CLIENT_CONFIG = {
-    "installed": {
+    "web": {
         "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
         "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
         "redirect_uris": [REDIRECT_URI],

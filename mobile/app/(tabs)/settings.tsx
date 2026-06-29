@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   Linking,
   ScrollView,
   StyleSheet,
@@ -21,8 +22,7 @@ export default function SettingsScreen() {
   const [calConnected, setCalConnected] = useState<boolean | null>(null);
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null);
 
-  // Lazily check integration status
-  useState(() => {
+  function refreshStatuses() {
     fetch(`${API_BASE_URL}/calendar/status`)
       .then(r => r.json())
       .then(d => setCalConnected(d.connected))
@@ -31,7 +31,20 @@ export default function SettingsScreen() {
       .then(r => r.json())
       .then(d => setEmailConnected(d.connected))
       .catch(() => setEmailConnected(false));
-  });
+  }
+
+  useEffect(() => {
+    refreshStatuses();
+    const appState = AppState.currentState;
+    const ref = { current: appState };
+    const sub = AppState.addEventListener('change', next => {
+      if (ref.current.match(/inactive|background/) && next === 'active') {
+        refreshStatuses();
+      }
+      ref.current = next;
+    });
+    return () => sub.remove();
+  }, []);
 
   async function handleLogout() {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
@@ -77,14 +90,18 @@ export default function SettingsScreen() {
             label="Google Calendar"
             statusLabel={calStatus.label}
             statusColor={calStatus.color}
-            onConnect={() => Alert.alert('Connect Calendar', `Open ${API_BASE_URL}/calendar/connect in your browser to connect Google Calendar.`)}
+            onConnect={() => Linking.openURL(`${API_BASE_URL}/calendar/connect`).catch(() =>
+              Alert.alert('Error', 'Could not open browser. Try again.')
+            )}
           />
           <RowDiv />
           <IntegrationRow
             label="Gmail"
             statusLabel={emailStatus.label}
             statusColor={emailStatus.color}
-            onConnect={() => Alert.alert('Connect Gmail', `Open ${API_BASE_URL}/email/connect in your browser to connect Gmail.`)}
+            onConnect={() => Linking.openURL(`${API_BASE_URL}/email/connect`).catch(() =>
+              Alert.alert('Error', 'Could not open browser. Try again.')
+            )}
           />
           <RowDiv />
           <IntegrationRow
