@@ -1,3 +1,8 @@
+import json
+import os
+
+import anthropic
+
 from app.schemas.extraction import (
     ExtractedAccount,
     ExtractedActivity,
@@ -8,314 +13,128 @@ from app.schemas.extraction import (
     ExtractionResult,
 )
 
+_client: anthropic.Anthropic | None = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    return _client
+
+
+_SYSTEM = """You are a field intelligence extraction engine for medical device sales reps.
+Extract structured intelligence from voice recap transcripts.
+
+Return ONLY valid JSON matching this exact schema — no markdown, no explanation:
+{
+  "summary": "1-2 sentence summary of the visit/recap",
+  "accounts": [{"name": str, "city": str|null, "state": str|null, "status": str|null, "momentum": str|null, "next_action": str|null}],
+  "contacts": [{"name": str, "account_name": str|null, "role": str|null, "discipline": str|null, "relationship_note": str|null, "relationship_status": str|null, "champion_level": str|null}],
+  "activities": [{"account_name": str|null, "activity_type": str, "summary": str, "details": str|null, "outcome": str|null, "momentum": str|null, "next_step": str|null, "confidence_score": float}],
+  "signals": [{"account_name": str|null, "contact_names": [str], "signal_type": str, "title": str, "summary": str|null, "evidence_text": str|null, "confidence_score": float, "impact_level": str, "urgency": str, "suggested_action": str|null, "status": "accepted"}],
+  "tasks": [{"account_name": str|null, "title": str, "description": str|null, "priority": str, "task_type": str|null}],
+  "referral_pathway_updates": [],
+  "risks": [],
+  "opportunities": [],
+  "wins": [],
+  "open_questions": [],
+  "possible_phi_warning": false
+}
+
+Always return empty arrays [] for referral_pathway_updates, risks, opportunities, wins, and open_questions.
+
+Signal types (pick the most specific): opportunity, win, risk, milestone, relationship, crm, continuity, referral_pathway, implementation, momentum, task, question
+Impact levels: high, medium, low
+Urgency levels: high, medium, low, none
+Momentum values: rising, stable, declining, unknown
+Champion levels: champion, supportive, emerging, neutral, unknown
+Activity types: site_visit, therapist_training, lunch_and_learn, call, email, patient_eval, other
+
+Rules:
+- Extract ALL signals visible in the transcript — don't summarize, extract each one as its own signal
+- Signals are the most important output — prioritize quantity and quality
+- suggested_action should be a concrete next step for the sales rep
+- If a patient is mentioned, set possible_phi_warning: true
+- confidence_score range: 0.0 to 1.0"""
+
+
+def extract_text_from_image(image_base64: str, media_type: str = "image/jpeg") -> str:
+    """Use Claude vision to extract field-relevant text from a photo."""
+    valid_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if media_type not in valid_types:
+        media_type = "image/jpeg"
+    msg = _get_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1024,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": image_base64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        "You are a medical device sales rep assistant. "
+                        "Describe everything in this image that is relevant to field intelligence: "
+                        "names, titles, organizations, contact information, meeting notes, whiteboard content, "
+                        "business cards, schedules, product names, or any clinical/facility context. "
+                        "Write in plain sentences as if the sales rep is dictating their field notes from what they see. "
+                        "If you see a business card, capture all contact details. "
+                        "If you see handwritten notes, transcribe them. "
+                        "If the image contains no useful field intelligence, say so briefly."
+                    ),
+                },
+            ],
+        }],
+    )
+    return msg.content[0].text.strip()
+
 
 def extract_field_intelligence(transcript: str) -> ExtractionResult:
-    """
-    Heuristic extraction engine. Replace with LLM call returning strict
-    JSON matching ExtractionResult once the LLM layer is wired in.
-    """
-    text = transcript.lower()
-    accounts = []
-    contacts = []
-    activities = []
-    signals = []
-    tasks = []
-    referral_updates = []
-    risks = []
-    opportunities = []
-    wins = []
-    open_questions = []
+    try:
+        msg = _get_client().messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=4096,
+            system=_SYSTEM,
+            messages=[{"role": "user", "content": f"Extract field intelligence from this recap:\n\n{transcript}"}],
+        )
+        raw = msg.content[0].text.strip()
+        # Strip markdown code blocks if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        data = json.loads(raw)
 
-    # ── IU Health / Ryan / Emily block ────────────────────────────────────────
+        def _parse_list(cls, items):
+            result = []
+            for item in items:
+                try:
+                    result.append(cls(**item))
+                except Exception:
+                    pass
+            return result
 
-    if "iu health" in text or "neuroscience" in text or "robotic" in text:
-        iu_account = "IU Health Neuroscience & Robotics Center"
-        accounts.append(
-            ExtractedAccount(
-                name=iu_account,
-                city="Indianapolis",
-                state="IN",
-                status="treating_patients",
-                momentum="stable",
-                next_action="Confirm SAPS continuity and identify replacement for Emily if needed.",
-            )
+        return ExtractionResult(
+            summary=data.get("summary", "Field recap processed."),
+            accounts=_parse_list(ExtractedAccount, data.get("accounts", [])),
+            contacts=_parse_list(ExtractedContact, data.get("contacts", [])),
+            activities=_parse_list(ExtractedActivity, data.get("activities", [])),
+            signals=_parse_list(ExtractedSignal, data.get("signals", [])),
+            tasks=_parse_list(ExtractedTask, data.get("tasks", [])),
+            referral_pathway_updates=[],
+            risks=[],
+            opportunities=[],
+            wins=[],
+            open_questions=[],
+            possible_phi_warning=data.get("possible_phi_warning", False),
         )
-        activities.append(
-            ExtractedActivity(
-                account_name=iu_account,
-                activity_type="therapist_training",
-                summary="SAPS/device support or therapist orientation at IU Neuroscience & Robotics Center.",
-                details=transcript,
-                outcome="Therapy readiness strengthened.",
-                momentum="stable",
-                confidence_score=0.8,
-            )
-        )
-
-    if "ryan" in text:
-        contacts.append(
-            ExtractedContact(
-                name="Ryan",
-                account_name="IU Health Neuroscience & Robotics Center",
-                role="Therapy contact",
-                relationship_note="Oriented on SAPS computer.",
-                relationship_status="active",
-                champion_level="emerging",
-            )
-        )
-        wins.append("Ryan oriented on SAPS computer.")
-        signals.append(
-            ExtractedSignal(
-                account_name="IU Health Neuroscience & Robotics Center",
-                contact_names=["Ryan"],
-                signal_type="implementation",
-                title="Ryan completed SAPS orientation",
-                summary="Ryan was oriented on the SAPS computer at IU Health Neuroscience & Robotics Center.",
-                evidence_text=transcript,
-                confidence_score=0.9,
-                impact_level="medium",
-                urgency="low",
-                suggested_action="Confirm Ryan can run SAPS independently.",
-            )
-        )
-        signals.append(
-            ExtractedSignal(
-                account_name="IU Health Neuroscience & Robotics Center",
-                contact_names=["Ryan"],
-                signal_type="win",
-                title="Ryan trained on SAPS",
-                summary="Successful SAPS training completed with Ryan.",
-                evidence_text=transcript,
-                confidence_score=0.9,
-                impact_level="medium",
-                urgency="none",
-                suggested_action=None,
-            )
-        )
-
-    emily_leaving = "emily" in text and (
-        "leaving" in text or "mid-july" in text or "mid july" in text
-    )
-
-    if "emily" in text:
-        relationship_status = "transitioning" if emily_leaving else "active"
-        contacts.append(
-            ExtractedContact(
-                name="Emily",
-                account_name="IU Health Neuroscience & Robotics Center",
-                role="IT / device logistics",
-                relationship_note="Helped receive SAPS computer. Leaving mid-July.",
-                relationship_status=relationship_status,
-                champion_level="supportive",
-            )
-        )
-
-    if emily_leaving:
-        risks.append("Emily is leaving mid-July; replacement contact needs to be identified.")
-        tasks.append(
-            ExtractedTask(
-                account_name="IU Health Neuroscience & Robotics Center",
-                title="Identify Emily's replacement before mid-July",
-                description="Confirm who will own SAPS/device logistics after Emily leaves.",
-                priority="high",
-                task_type="follow_up",
-            )
-        )
-        signals.append(
-            ExtractedSignal(
-                account_name="IU Health Neuroscience & Robotics Center",
-                contact_names=["Emily"],
-                signal_type="relationship",
-                title="Emily leaving mid-July",
-                summary="Emily is departing mid-July and no replacement has been identified.",
-                evidence_text=transcript,
-                confidence_score=0.95,
-                impact_level="high",
-                urgency="high",
-                suggested_action="Identify replacement contact before mid-July.",
-            )
-        )
-        signals.append(
-            ExtractedSignal(
-                account_name="IU Health Neuroscience & Robotics Center",
-                contact_names=["Emily"],
-                signal_type="risk",
-                title="Emily leaving mid-July with no identified replacement",
-                summary="Device logistics and SAPS oversight at IU Health will have a coverage gap when Emily departs.",
-                evidence_text=transcript,
-                confidence_score=0.95,
-                impact_level="high",
-                urgency="high",
-                suggested_action="Identify and onboard Emily's replacement before mid-July.",
-            )
-        )
-
-    if "transferred" in text or "transfer" in text:
-        signals.append(
-            ExtractedSignal(
-                account_name="IU Health Neuroscience & Robotics Center",
-                contact_names=[],
-                signal_type="continuity",
-                title="Patient transferred mid-protocol from Ascension Naab Road to IU",
-                summary="A patient transferred between therapy sites mid-protocol, requiring continuity coordination.",
-                evidence_text=transcript,
-                confidence_score=0.9,
-                impact_level="high",
-                urgency="medium",
-                suggested_action="Create a patient transfer playbook to standardize mid-protocol handoffs.",
-            )
-        )
-
-    # ── North Central PT / Todd / Judy block ──────────────────────────────────
-
-    if "north central" in text:
-        nc_account = "North Central Physical Therapy"
-        accounts.append(
-            ExtractedAccount(
-                name=nc_account,
-                city="Logansport",
-                state="IN",
-                status="education_started",
-                momentum="rising",
-                next_action="Follow up with Todd regarding Judy assessment.",
-            )
-        )
-        contacts.append(
-            ExtractedContact(
-                name="Todd",
-                account_name=nc_account,
-                role="Primary clinic contact",
-                relationship_note="Main contact for North Central PT.",
-                relationship_status="active",
-                champion_level="supportive",
-            )
-        )
-        activities.append(
-            ExtractedActivity(
-                account_name=nc_account,
-                activity_type="site_visit",
-                summary="North Central PT follow-up after lunch and learn.",
-                details=transcript,
-                outcome="UEDX kit delivered and potential candidates discussed.",
-                momentum="increased",
-                next_step="Follow up regarding Judy assessment.",
-                confidence_score=0.85,
-            )
-        )
-        tasks.append(
-            ExtractedTask(
-                account_name=nc_account,
-                title="Follow up with Todd regarding Judy assessment",
-                description="Check whether Judy's UEDX/FMA assessment will be sent over.",
-                priority="high",
-                task_type="patient_eval",
-            )
-        )
-        tasks.append(
-            ExtractedTask(
-                account_name=nc_account,
-                title="Add North Central Physical Therapy to Salesforce",
-                description="Create account and contact record for North Central PT in Salesforce.",
-                priority="medium",
-                task_type="salesforce",
-            )
-        )
-        opportunities.append("North Central has possible candidate patients and rising early momentum.")
-
-    if "uedx" in text and ("delivered" in text or "kit" in text):
-        signals.append(
-            ExtractedSignal(
-                account_name="North Central Physical Therapy",
-                contact_names=[],
-                signal_type="milestone",
-                title="UEDX kit delivered to North Central Physical Therapy",
-                summary="UEDX kit was delivered, marking the start of the clinical trial readiness phase.",
-                evidence_text=transcript,
-                confidence_score=0.95,
-                impact_level="medium",
-                urgency="low",
-                suggested_action="Follow up after therapists review the UEDX resources.",
-            )
-        )
-
-    if ("three" in text or "3" in text) and "patient" in text or "judy" in text:
-        signals.append(
-            ExtractedSignal(
-                account_name="North Central Physical Therapy",
-                contact_names=["Todd", "Judy"],
-                signal_type="opportunity",
-                title="Three potential stroke patients identified, Judy as likely first evaluation",
-                summary="North Central PT has three possible stroke patient candidates. Judy is the likely first evaluation.",
-                evidence_text=transcript,
-                confidence_score=0.9,
-                impact_level="high",
-                urgency="medium",
-                suggested_action="Follow up with Todd on Judy as the likely first evaluation candidate.",
-            )
-        )
-
-    if "salesforce" in text and "north central" in text:
-        signals.append(
-            ExtractedSignal(
-                account_name="North Central Physical Therapy",
-                contact_names=[],
-                signal_type="crm",
-                title="Add North Central Physical Therapy to Salesforce",
-                summary="North Central PT does not yet have a Salesforce account record.",
-                evidence_text=transcript,
-                confidence_score=0.95,
-                impact_level="medium",
-                urgency="medium",
-                suggested_action="Create Salesforce account and contact records for North Central PT.",
-            )
-        )
-
-    if "follow up" in text and "todd" in text:
-        signals.append(
-            ExtractedSignal(
-                account_name="North Central Physical Therapy",
-                contact_names=["Todd"],
-                signal_type="task",
-                title="Follow up with Todd next week regarding Judy assessment",
-                summary="Field rep needs to follow up with Todd at North Central PT next week.",
-                evidence_text=transcript,
-                confidence_score=0.95,
-                impact_level="high",
-                urgency="high",
-                suggested_action="Create a follow-up task due next week.",
-            )
-        )
-
-    # ── Generic referral / PHI handling ───────────────────────────────────────
-
-    if "referral" in text or "fax" in text:
-        referral_updates.append(
-            ExtractedReferralPathwayUpdate(
-                account_name=None,
-                update_type="possible_referral_pathway_update",
-                detail="Transcript mentions referral or fax information. Review for pathway update.",
-            )
-        )
-
-    possible_phi = any(
-        token in text
-        for token in ["dob", "date of birth", "mrn", "medical record", "social security"]
-    )
-
-    if not accounts:
-        open_questions.append("Which account/site should this recap be linked to?")
-
-    return ExtractionResult(
-        summary="AI-extracted field recap. Review before saving.",
-        accounts=accounts,
-        contacts=contacts,
-        activities=activities,
-        signals=signals,
-        tasks=tasks,
-        referral_pathway_updates=referral_updates,
-        risks=risks,
-        opportunities=opportunities,
-        wins=wins,
-        open_questions=open_questions,
-        possible_phi_warning=possible_phi,
-    )
+    except Exception as exc:
+        raise RuntimeError(f"AI extraction failed: {exc}") from exc

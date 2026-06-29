@@ -59,7 +59,7 @@ class ExtractedSignal(BaseModel):
     impact_level: str = "medium"
     urgency: str = "low"
     suggested_action: Optional[str] = None
-    status: str = "new"
+    status: str = "accepted"
 
 
 class ExtractionResult(BaseModel):

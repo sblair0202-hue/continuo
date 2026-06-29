@@ -12,7 +12,7 @@ from app.schemas.voice_journal import (
     VoiceJournalCreate,
     VoiceJournalResponse,
 )
-from app.services.field_intelligence_engine import extract_field_intelligence
+from app.services.field_intelligence_engine import extract_field_intelligence, extract_text_from_image
 
 router = APIRouter()
 
@@ -34,9 +34,25 @@ def get_or_create_account(
     return account
 
 
+@router.post("/extract-from-image")
+def extract_from_image(payload: dict):
+    image_base64 = payload.get("image_base64", "")
+    media_type = payload.get("media_type", "image/jpeg")
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 is required")
+    try:
+        text = extract_text_from_image(image_base64, media_type)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"extracted_text": text}
+
+
 @router.post("/voice-journal", response_model=VoiceJournalResponse)
 def create_voice_journal(payload: VoiceJournalCreate, db: Session = Depends(get_db)):
-    extraction = extract_field_intelligence(payload.transcript)
+    try:
+        extraction = extract_field_intelligence(payload.transcript)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
     entry = VoiceJournalEntry(
         user_id=payload.user_id,
         transcript=payload.transcript,
@@ -194,6 +210,29 @@ def get_account(account_id: int, db: Session = Depends(get_db)):
     return account
 
 
+_ACCOUNT_EDITABLE = {
+    "name", "city", "state", "status", "momentum", "next_action", "priority", "organization",
+    # Sprint 7 referral fields
+    "address", "phone", "fax", "website", "account_type",
+    "referral_instructions", "scheduling_instructions",
+    "referral_contact", "referral_email", "preferred_referral_method", "insurance_notes",
+    "is_implant_center", "is_therapy_site", "is_evaluation_site",
+    "vivistim_status", "pm_r_available", "neurosurgery_available",
+}
+
+
+@router.patch("/accounts/{account_id}")
+def update_account(account_id: int, payload: dict, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    for field, value in payload.items():
+        if field in _ACCOUNT_EDITABLE:
+            setattr(account, field, value)
+    db.commit()
+    return account
+
+
 @router.get("/contacts")
 def list_contacts(db: Session = Depends(get_db)):
     return db.query(Contact).all()
@@ -215,6 +254,39 @@ def list_tasks(account_id: Optional[int] = Query(None), db: Session = Depends(ge
     return q.all()
 
 
+@router.delete("/tasks/{task_id}")
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    db.delete(task)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@router.patch("/tasks/{task_id}")
+def update_task(task_id: int, payload: dict, db: Session = Depends(get_db)):
+    from app.models.domain import ActivityHistory
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    for field in ("title", "description", "status", "priority", "category", "due_date", "opportunity_id"):
+        if field in payload:
+            setattr(task, field, payload[field])
+    if payload.get("status") == "done":
+        hist = ActivityHistory(
+            account_id=task.account_id,
+            title=task.title,
+            category=task.category or task.task_type,
+            source="task",
+            source_id=task.id,
+            completed_at=datetime.utcnow(),
+        )
+        db.add(hist)
+    db.commit()
+    return task
+
+
 @router.get("/signals")
 def list_signals(account_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     q = db.query(Signal)
@@ -231,3 +303,53 @@ def delete_signal(signal_id: int, db: Session = Depends(get_db)):
     db.delete(signal)
     db.commit()
     return {"status": "deleted"}
+
+
+VALID_STATUSES = {"new", "accepted", "active", "resolved", "rejected", "historical"}
+
+
+@router.patch("/signals/{signal_id}/status")
+def update_signal_status(signal_id: int, payload: dict, db: Session = Depends(get_db)):
+    signal = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    new_status = payload.get("status")
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {VALID_STATUSES}")
+    signal.status = new_status
+    db.commit()
+    return {"id": signal_id, "status": signal.status}
+
+
+@router.patch("/contacts/{contact_id}")
+def update_contact(contact_id: int, payload: dict, db: Session = Depends(get_db)):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    for field in ("name", "role", "discipline", "phone", "relationship_notes", "champion_level", "relationship_status"):
+        if field in payload:
+            setattr(contact, field, payload[field])
+    db.commit()
+    return contact
+
+
+@router.delete("/contacts/{contact_id}")
+def delete_contact(contact_id: int, db: Session = Depends(get_db)):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    db.delete(contact)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@router.patch("/signals/{signal_id}")
+def update_signal(signal_id: int, payload: dict, db: Session = Depends(get_db)):
+    signal = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    for field in ("title", "signal_type", "impact_level", "urgency", "suggested_action", "summary"):
+        if field in payload:
+            setattr(signal, field, payload[field])
+    db.commit()
+    return {"id": signal_id}

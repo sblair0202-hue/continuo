@@ -1,6 +1,9 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,143 +13,306 @@ import {
 } from 'react-native';
 
 import { api } from '../../src/api/client';
-import { Colors } from '../../src/constants/colors';
-import type { Account, Contact, Signal } from '../../src/types';
+import { Colors, sp } from '../../src/constants/colors';
+import type { SearchResults } from '../../src/types';
 
-type Results = {
-  accounts: Account[];
-  contacts: Contact[];
-  signals: Signal[];
-};
+type Mode = 'search' | 'ask';
 
 export default function SearchScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Results | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [mode, setMode] = useState<Mode>('search');
 
-  async function handleSearch(text: string) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [askQuery, setAskQuery] = useState('');
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  function handleSearch(text: string) {
     setQuery(text);
-    if (text.trim().length < 2) { setResults(null); return; }
-    setSearching(true);
-    try {
-      const [accounts, contacts, signals] = await Promise.all([
-        api.getAccounts(),
-        api.getContacts(),
-        api.getSignals(),
-      ]);
-      const q = text.toLowerCase();
-      setResults({
-        accounts: accounts.filter((a) => a.name.toLowerCase().includes(q)),
-        contacts: contacts.filter((c) => c.name.toLowerCase().includes(q)),
-        signals: signals.filter(
-          (s) => s.title.toLowerCase().includes(q) || (s.summary ?? '').toLowerCase().includes(q)
-        ),
-      });
-    } finally {
-      setSearching(false);
-    }
+    setResults(null);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (text.trim().length < 2) return;
+    searchTimer.current = setTimeout(() => {
+      setSearching(true);
+      api.search(text.trim()).then(r => setResults(r)).catch(() => {}).finally(() => setSearching(false));
+    }, 350);
   }
 
-  const total = results ? results.accounts.length + results.contacts.length + results.signals.length : 0;
+  function handleAsk() {
+    if (!askQuery.trim() || asking) return;
+    setAsking(true);
+    setAnswer(null);
+    api.ask(askQuery.trim())
+      .then(r => setAnswer(r.answer))
+      .catch(() => setAnswer('Unable to reach server — check your connection.'))
+      .finally(() => setAsking(false));
+  }
+
+  const totalResults = results
+    ? results.accounts.length + results.contacts.length + results.signals.length + results.tasks.length
+    : 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchBar}>
-        <TextInput
-          style={styles.input}
-          placeholder="Search accounts, contacts, signals..."
-          placeholderTextColor={Colors.textSecondary}
-          value={query}
-          onChangeText={handleSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={88}>
+      {/* Mode toggle */}
+      <View style={s.modeRow}>
+        <TouchableOpacity
+          style={[s.modeTab, mode === 'search' && s.modeTabActive]}
+          onPress={() => setMode('search')}
+          activeOpacity={0.7}
+        >
+          <Text style={[s.modeTabText, mode === 'search' && s.modeTabTextActive]}>Search</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.modeTab, mode === 'ask' && s.modeTabActive]}
+          onPress={() => setMode('ask')}
+          activeOpacity={0.7}
+        >
+          <Text style={[s.modeTabText, mode === 'ask' && s.modeTabTextActive]}>Ask</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {query.length >= 2 && !searching && total === 0 && (
-          <Text style={styles.empty}>No results for "{query}"</Text>
-        )}
+      {/* ── SEARCH ── */}
+      {mode === 'search' && (
+        <>
+          <View style={s.inputBar}>
+            <TextInput
+              style={s.input}
+              placeholder="Accounts, contacts, signals, tasks…"
+              placeholderTextColor={Colors.textTertiary}
+              value={query}
+              onChangeText={handleSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {searching && <ActivityIndicator size="small" color={Colors.textTertiary} style={{ marginLeft: sp.sm }} />}
+          </View>
 
-        {results && results.accounts.length > 0 && (
-          <>
-            <Text style={styles.groupLabel}>Accounts</Text>
-            {results.accounts.map((a) => (
-              <TouchableOpacity key={a.id} style={styles.row} onPress={() => router.push(`/account/${a.id}`)}>
-                <Text style={styles.rowTitle}>{a.name}</Text>
-                {a.city && <Text style={styles.rowSub}>{a.city}{a.state ? `, ${a.state}` : ''}</Text>}
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
+          <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+            {query.length >= 2 && !searching && totalResults === 0 && (
+              <Text style={s.empty}>No results for "{query}"</Text>
+            )}
 
-        {results && results.contacts.length > 0 && (
-          <>
-            <Text style={styles.groupLabel}>Contacts</Text>
-            {results.contacts.map((c) => (
-              <View key={c.id} style={styles.row}>
-                <Text style={styles.rowTitle}>{c.name}</Text>
-                {c.role && <Text style={styles.rowSub}>{c.role}</Text>}
+            {results?.accounts && results.accounts.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Accounts</Text>
+                {results.accounts.map(a => (
+                  <TouchableOpacity key={a.id} style={s.row} onPress={() => router.push(`/account/${a.id}`)} activeOpacity={0.6}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rowTitle}>{a.name}</Text>
+                      {a.city && <Text style={s.rowSub}>{a.city}{a.state ? `, ${a.state}` : ''}</Text>}
+                      {a.next_action && <Text style={s.rowHint}>{a.next_action}</Text>}
+                    </View>
+                    <Text style={[s.rowBadge, { color: Colors.textTertiary }]}>{a.momentum}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            {results?.contacts && results.contacts.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Contacts</Text>
+                {results.contacts.map(c => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={s.row}
+                    onPress={() => c.account_id ? router.push(`/account/${c.account_id}`) : undefined}
+                    activeOpacity={c.account_id ? 0.6 : 1}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rowTitle}>{c.name}</Text>
+                      <Text style={s.rowSub}>
+                        {[c.discipline, c.role].filter(Boolean).join(' · ')}
+                        {c.account_name ? ` · ${c.account_name}` : ''}
+                      </Text>
+                      {c.phone && <Text style={s.rowHint}>{c.phone}</Text>}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            {results?.signals && results.signals.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Signals</Text>
+                {results.signals.map(sig => (
+                  <View key={sig.id} style={s.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rowTitle}>{sig.title}</Text>
+                      {sig.suggested_action && <Text style={s.rowSub}>{sig.suggested_action}</Text>}
+                    </View>
+                    <Text style={[s.rowBadge, {
+                      color: sig.impact_level === 'high' ? Colors.critical : sig.impact_level === 'medium' ? Colors.warning : Colors.textTertiary
+                    }]}>{sig.impact_level}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {results?.tasks && results.tasks.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Tasks</Text>
+                {results.tasks.map(t => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={s.row}
+                    onPress={() => t.account_id ? router.push(`/account/${t.account_id}`) : undefined}
+                    activeOpacity={t.account_id ? 0.6 : 1}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rowTitle}>{t.title}</Text>
+                      {t.account_name && <Text style={s.rowSub}>{t.account_name}</Text>}
+                      {t.due_date && <Text style={s.rowHint}>Due {t.due_date.split('T')[0]}</Text>}
+                    </View>
+                    <Text style={[s.rowBadge, { color: t.priority === 'high' ? Colors.critical : Colors.textTertiary }]}>{t.priority}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </ScrollView>
+        </>
+      )}
+
+      {/* ── ASK ── */}
+      {mode === 'ask' && (
+        <View style={{ flex: 1 }}>
+          <View style={s.askHeader}>
+            <Text style={s.askHeaderTitle}>Territory Intelligence</Text>
+            <Text style={s.askHeaderSub}>Ask about accounts, contacts, tasks, signals, or opportunities.</Text>
+          </View>
+
+          <ScrollView contentContainerStyle={s.askScroll} keyboardShouldPersistTaps="handled">
+            {asking && (
+              <View style={s.thinkingRow}>
+                <ActivityIndicator size="small" color={Colors.textTertiary} />
+                <Text style={s.thinkingText}>Thinking…</Text>
               </View>
-            ))}
-          </>
-        )}
+            )}
 
-        {results && results.signals.length > 0 && (
-          <>
-            <Text style={styles.groupLabel}>Signals</Text>
-            {results.signals.map((s) => (
-              <View key={s.id} style={styles.row}>
-                <Text style={styles.rowTitle}>{s.title}</Text>
-                {s.summary && <Text style={styles.rowSub}>{s.summary}</Text>}
+            {answer && !asking && (
+              <View style={s.answerBlock}>
+                <Text style={s.answerMeta}>Continuo</Text>
+                <Text style={s.answerText}>{answer}</Text>
               </View>
-            ))}
-          </>
-        )}
-      </ScrollView>
-    </View>
+            )}
+
+            {!answer && !asking && (
+              <Text style={s.askPlaceholder}>Ask a question below to get started.</Text>
+            )}
+          </ScrollView>
+
+          <View style={s.askInputRow}>
+            <TextInput
+              style={s.askInput}
+              placeholder="Ask anything…"
+              placeholderTextColor={Colors.textTertiary}
+              value={askQuery}
+              onChangeText={setAskQuery}
+              multiline
+              returnKeyType="send"
+              onSubmitEditing={handleAsk}
+              blurOnSubmit
+            />
+            <TouchableOpacity
+              style={[s.sendBtn, (!askQuery.trim() || asking) && s.sendBtnDisabled]}
+              onPress={handleAsk}
+              disabled={!askQuery.trim() || asking}
+              activeOpacity={0.7}
+            >
+              <Text style={s.sendBtnText}>Ask</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  searchBar: {
-    backgroundColor: Colors.surface,
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+const s = StyleSheet.create({
+  // Mode tabs
+  modeRow: {
+    flexDirection: 'row', backgroundColor: Colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
+  },
+  modeTab: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+    borderBottomWidth: 2, borderBottomColor: 'transparent',
+  },
+  modeTabActive: { borderBottomColor: Colors.primary },
+  modeTabText: { fontSize: 14, fontWeight: '500', color: Colors.textSecondary },
+  modeTabTextActive: { color: Colors.primary, fontWeight: '600' },
+
+  // Search input
+  inputBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.surface, paddingHorizontal: sp.md, paddingVertical: sp.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
   },
   input: {
-    backgroundColor: Colors.background,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: Colors.text,
+    flex: 1, backgroundColor: Colors.background, borderRadius: 10,
+    paddingHorizontal: sp.md, paddingVertical: sp.sm + 2,
+    fontSize: 15, color: Colors.text,
   },
-  scroll: { padding: 16 },
+  scroll: { padding: sp.md },
+
+  // Section labels
   groupLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginTop: 16,
-    marginBottom: 6,
+    fontSize: 11, fontWeight: '600', color: Colors.textSecondary,
+    letterSpacing: 0.6, textTransform: 'uppercase',
+    marginTop: sp.lg, marginBottom: 6,
   },
+
+  // Result rows
   row: {
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.surface, borderRadius: 10, padding: sp.md, marginBottom: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2, elevation: 1,
+    gap: sp.sm,
   },
   rowTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  rowSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 3 },
+  rowSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  rowHint: { fontSize: 12, color: Colors.primary, marginTop: 3 },
+  rowBadge: { fontSize: 12, fontWeight: '500' },
   empty: { fontSize: 14, color: Colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: 40 },
+
+  // Ask mode
+  askHeader: {
+    backgroundColor: Colors.surface, padding: sp.md,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
+  },
+  askHeaderTitle: { fontSize: 15, fontWeight: '600', color: Colors.text, marginBottom: 3 },
+  askHeaderSub: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
+  askScroll: { padding: sp.md, flexGrow: 1 },
+  thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: sp.sm, paddingVertical: sp.md },
+  thinkingText: { fontSize: 14, color: Colors.textSecondary },
+  answerBlock: {
+    backgroundColor: Colors.surface2, borderRadius: 10, padding: sp.md, marginBottom: sp.md,
+  },
+  answerMeta: {
+    fontSize: 11, fontWeight: '600', color: Colors.textSecondary,
+    letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: sp.sm,
+  },
+  answerText: { fontSize: 15, color: Colors.text, lineHeight: 24 },
+  askPlaceholder: { fontSize: 14, color: Colors.textTertiary, textAlign: 'center', marginTop: 60 },
+  askInputRow: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: sp.sm,
+    padding: sp.md, backgroundColor: Colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border,
+  },
+  askInput: {
+    flex: 1, backgroundColor: Colors.background, borderRadius: 10,
+    paddingHorizontal: sp.md, paddingVertical: sp.sm + 2,
+    fontSize: 15, color: Colors.text, maxHeight: 100,
+  },
+  sendBtn: {
+    backgroundColor: Colors.primary, borderRadius: 10,
+    paddingHorizontal: sp.md, paddingVertical: sp.sm + 2,
+  },
+  sendBtnDisabled: { opacity: 0.35 },
+  sendBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });

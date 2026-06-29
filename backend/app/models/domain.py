@@ -22,10 +22,36 @@ class Account(Base):
     next_action = Column(Text, nullable=True)
     salesforce_account_id = Column(String, nullable=True)
 
+    # Basic contact info
+    address = Column(Text, nullable=True)
+    phone = Column(String, nullable=True)
+    fax = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    account_type = Column(String, nullable=True)
+
+    # Referral info
+    referral_instructions = Column(Text, nullable=True)
+    scheduling_instructions = Column(Text, nullable=True)
+    referral_contact = Column(String, nullable=True)
+    referral_email = Column(String, nullable=True)
+    preferred_referral_method = Column(String, nullable=True)
+    insurance_notes = Column(Text, nullable=True)
+
+    # Clinical flags
+    is_implant_center = Column(Boolean, default=False)
+    is_therapy_site = Column(Boolean, default=False)
+    is_evaluation_site = Column(Boolean, default=False)
+    vivistim_status = Column(String, nullable=True)
+    pm_r_available = Column(Boolean, default=False)
+    neurosurgery_available = Column(Boolean, default=False)
+
     contacts = relationship("Contact", back_populates="account")
     activities = relationship("Activity", back_populates="account")
     tasks = relationship("Task", back_populates="account")
     signals = relationship("Signal", back_populates="account")
+    opportunities = relationship("Opportunity", back_populates="account")
+    milestones = relationship("Milestone", back_populates="account")
+    activity_history = relationship("ActivityHistory", back_populates="account")
 
 
 class Contact(Base):
@@ -86,11 +112,13 @@ class Task(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    opportunity_id = Column(Integer, ForeignKey("opportunities.id"), nullable=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(DateTime, nullable=True)
     priority = Column(String, default="medium")
     status = Column(String, default="open")
+    category = Column(String, nullable=True)
     task_type = Column(String, nullable=True)
     source_type = Column(String, default="voice")
     source_id = Column(Integer, nullable=True)
@@ -122,6 +150,55 @@ class Signal(Base):
     contact = relationship("Contact", back_populates="signals")
 
 
+class Opportunity(Base):
+    __tablename__ = "opportunities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    title = Column(String, nullable=False)
+    status = Column(String, default="new")  # new/active/waiting/won/lost
+    probability = Column(Float, nullable=True)
+    next_action = Column(Text, nullable=True)
+    owner = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    last_activity_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account", back_populates="opportunities")
+    milestones = relationship("Milestone", back_populates="opportunity")
+
+
+class Milestone(Base):
+    __tablename__ = "milestones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    opportunity_id = Column(Integer, ForeignKey("opportunities.id"), nullable=True)
+    title = Column(String, nullable=False)
+    milestone_type = Column(String, nullable=True)  # delivery/training/evaluation/implant/screening/meeting/other
+    date = Column(DateTime, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account", back_populates="milestones")
+    opportunity = relationship("Opportunity", back_populates="milestones")
+
+
+class ActivityHistory(Base):
+    __tablename__ = "activity_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    title = Column(String, nullable=False)
+    category = Column(String, nullable=True)
+    source = Column(String, default="manual")  # task/milestone/voice/manual
+    source_id = Column(Integer, nullable=True)
+    completed_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+
+    account = relationship("Account", back_populates="activity_history")
+
+
 class CalendarToken(Base):
     __tablename__ = "calendar_tokens"
 
@@ -134,3 +211,41 @@ class CalendarToken(Base):
     scopes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EmailToken(Base):
+    __tablename__ = "email_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, unique=True, index=True)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    token_uri = Column(String, nullable=True)
+    expiry = Column(DateTime, nullable=True)
+    scopes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
+    role = Column(String, default="standard")  # admin / standard
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False)
+    user_id = Column(String, nullable=True)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

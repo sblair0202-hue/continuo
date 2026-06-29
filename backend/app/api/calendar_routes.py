@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.domain import Account, CalendarToken, Contact, Signal
 from app.services import calendar_service
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
-USER_ID = "sarah"  # single-user for now
+_OAUTH_CALLBACK_USER = "sarah"  # browser-based OAuth flow has no JWT context
 
 
 @router.get("/connect")
@@ -23,9 +24,9 @@ def callback(code: str, db: Session = Depends(get_db)):
     """Google redirects here after user approves access."""
     token_data = calendar_service.exchange_code(code)
 
-    token = db.query(CalendarToken).filter(CalendarToken.user_id == USER_ID).first()
+    token = db.query(CalendarToken).filter(CalendarToken.user_id == _OAUTH_CALLBACK_USER).first()
     if not token:
-        token = CalendarToken(user_id=USER_ID)
+        token = CalendarToken(user_id=_OAUTH_CALLBACK_USER)
         db.add(token)
 
     token.access_token = token_data["access_token"]
@@ -44,14 +45,14 @@ def callback(code: str, db: Session = Depends(get_db)):
 
 
 @router.get("/status")
-def status(db: Session = Depends(get_db)):
-    token = db.query(CalendarToken).filter(CalendarToken.user_id == USER_ID).first()
+def status(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
     return {"connected": token is not None}
 
 
 @router.get("/today")
-def today_events(db: Session = Depends(get_db)):
-    token = db.query(CalendarToken).filter(CalendarToken.user_id == USER_ID).first()
+def today_events(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
     if not token:
         raise HTTPException(status_code=401, detail="Calendar not connected. Open http://localhost:8000/calendar/connect in your browser.")
 
@@ -93,8 +94,8 @@ def today_events(db: Session = Depends(get_db)):
 
 
 @router.get("/meeting-prep/{event_id}")
-def meeting_prep(event_id: str, account_id: int | None = None, db: Session = Depends(get_db)):
-    token = db.query(CalendarToken).filter(CalendarToken.user_id == USER_ID).first()
+def meeting_prep(event_id: str, account_id: int | None = None, user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
     if not token:
         raise HTTPException(status_code=401, detail="Calendar not connected.")
 

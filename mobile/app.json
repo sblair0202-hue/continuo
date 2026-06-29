@@ -8,23 +8,61 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sarahblair.continuo",
+     "infoPlist": {
+        "NSCameraUsageDescription": "Continuo uses the camera to capture field notes and documents.",
+        "NSMicrophoneUsageDescription": "Continuo uses the microphone to record voice recaps.",
+        "NSPhotoLibraryUsageDescription": "Continuo can access your photo library to attach images to field notes.",
+        "NSFaceIDUsageDescription": "Continuo uses Face ID to securely unlock your session.",
+        "NSContactsUsageDescription": "Continuo does not access your contacts.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      }
     },
     "android": {
+      "package": "com.sarahblair.continuo",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
-      "expo-asset"
-    ]
+      "expo-asset",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Continuo uses Face ID to securely unlock your session."
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": {
+        "development": "http://192.168.1.204:8001",
+        "preview": "https://api.continuo.app",
+        "production": "https://api.continuo.app"
+      },
+      "eas": {
+        "projectId": "290d2e7f-dd7d-4b15-8ba5-fc8786f9a8c2"
+      },
+      "router": {}
+    },
+    "owner": "sarblair"
   }
 }

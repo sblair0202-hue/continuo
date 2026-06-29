@@ -1,32 +1,81 @@
+import { Platform } from 'react-native';
+
 import type {
   Account,
+  AccountSnapshot,
   Activity,
+  ActivityHistoryItem,
+  AskResponse,
   CalendarEvent,
   Contact,
+  DailyBrief,
+  EmailExtractionResult,
+  EmailStatus,
+  EmailThread,
   ExtractionResult,
   MeetingPrep,
+  Milestone,
+  NotionStatus,
+  NotionSyncResult,
+  Opportunity,
+  SearchResults,
   Signal,
   Task,
+  VisitBrief,
   VoiceJournalResponse,
+  WeeklyBrief,
 } from '../types';
 
-// For device testing via Expo Go, replace with your machine's LAN IP (e.g. http://192.168.1.x:8000)
-export const API_BASE_URL = 'http://192.168.1.204:8000';
+// EXPO_PUBLIC_API_URL is set per build profile in eas.json
+// Falls back to LAN address for local Expo Go development
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'web' ? 'http://localhost:8001' : 'http://192.168.1.204:8001');
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+// Auth token injected by AuthContext — avoids async in every request
+let _authToken: string | null = null;
+export function setAuthToken(token: string | null): void {
+  _authToken = token;
+}
+
+// Friendly messages for common HTTP errors
+function friendlyError(status: number, body: string): string {
+  if (status === 401) return 'Your session has expired. Please sign in again.';
+  if (status === 403) return 'You don\'t have permission to do that.';
+  if (status === 404) return 'That resource was not found.';
+  if (status === 429) return 'Too many requests. Please wait a moment and try again.';
+  if (status >= 500) return 'The server ran into a problem. Try again in a moment.';
+  try {
+    const parsed = JSON.parse(body);
+    return parsed.detail ?? body;
+  } catch {
+    return body || `Error ${status}`;
+  }
+}
+
+async function request<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
+  const { timeoutMs = 10000, headers: extraHeaders, ...fetchOptions } = options ?? {};
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(extraHeaders as Record<string, string> | undefined),
+  };
+  if (_authToken) headers['Authorization'] = `Bearer ${_authToken}`;
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
-      ...options,
+      ...fetchOptions,
     });
-    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(friendlyError(res.status, body));
+    }
     return res.json() as Promise<T>;
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
-      throw new Error(`Cannot reach server at ${API_BASE_URL}. Is the backend running?`);
+      throw new Error('Request timed out. The AI is taking longer than expected — please try again.');
     }
     throw e;
   } finally {
@@ -48,6 +97,7 @@ export const api = {
     request<VoiceJournalResponse>('/voice-journal', {
       method: 'POST',
       body: JSON.stringify({ user_id: userId, transcript }),
+      timeoutMs: 45000,
     }),
   approveJournal: (id: number, extraction: ExtractionResult) =>
     request<{ status: string; voice_journal_entry_id: number }>(
@@ -60,4 +110,83 @@ export const api = {
     request<MeetingPrep>(
       `/calendar/meeting-prep/${encodeURIComponent(eventId)}${accountId != null ? `?account_id=${accountId}` : ''}`
     ),
+  updateSignalStatus: (id: number, status: string) =>
+    request<{ id: number; status: string }>(`/signals/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  updateSignal: (id: number, fields: Partial<Pick<Signal, 'title' | 'signal_type' | 'impact_level' | 'urgency' | 'suggested_action' | 'summary'>>) =>
+    request<{ id: number }>(`/signals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(fields),
+    }),
+  deleteSignal: (id: number) =>
+    request<{ status: string }>(`/signals/${id}`, { method: 'DELETE' }),
+  getDailyBrief: () => request<DailyBrief>('/daily-brief'),
+  getEmailStatus: () => request<EmailStatus>('/email/status'),
+  extractEmailSignals: () => request<EmailExtractionResult>('/email/extract-signals', { method: 'POST' }),
+  getNotionStatus: () => request<NotionStatus>('/notion/status'),
+  notionSync: () => request<NotionSyncResult>('/notion/sync', { method: 'POST' }),
+
+  // Opportunities
+  getOpportunities: (accountId?: number) =>
+    request<Opportunity[]>(`/opportunities${accountId != null ? `?account_id=${accountId}` : ''}`),
+  createOpportunity: (data: Partial<Opportunity> & { title: string }) =>
+    request<Opportunity>('/opportunities', { method: 'POST', body: JSON.stringify(data) }),
+  updateOpportunity: (id: number, data: Partial<Opportunity>) =>
+    request<Opportunity>(`/opportunities/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteOpportunity: (id: number) =>
+    request<{ status: string }>(`/opportunities/${id}`, { method: 'DELETE' }),
+
+  // Milestones
+  getMilestones: (accountId?: number) =>
+    request<Milestone[]>(`/milestones${accountId != null ? `?account_id=${accountId}` : ''}`),
+  createMilestone: (data: Partial<Milestone> & { title: string; date: string }) =>
+    request<Milestone>('/milestones', { method: 'POST', body: JSON.stringify(data) }),
+  updateMilestone: (id: number, data: Partial<Milestone>) =>
+    request<Milestone>(`/milestones/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteMilestone: (id: number) =>
+    request<{ status: string }>(`/milestones/${id}`, { method: 'DELETE' }),
+
+  // Tasks (enhanced)
+  updateTask: (id: number, data: Partial<Task>) =>
+    request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteTask: (id: number) =>
+    request<{ status: string }>(`/tasks/${id}`, { method: 'DELETE' }),
+
+  // Activity history
+  getActivityHistory: (accountId?: number) =>
+    request<ActivityHistoryItem[]>(`/activity-history${accountId != null ? `?account_id=${accountId}` : ''}`),
+
+  // Contacts (enhanced)
+  updateContact: (id: number, data: Partial<Contact>) =>
+    request<Contact>(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteContact: (id: number) =>
+    request<{ status: string }>(`/contacts/${id}`, { method: 'DELETE' }),
+
+  // Accounts (enhanced)
+  updateAccount: (id: number, data: Partial<Account>) =>
+    request<Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Sprint 8: Territory Intelligence
+  getAccountSnapshot: (id: number) =>
+    request<AccountSnapshot>(`/accounts/${id}/snapshot`, { timeoutMs: 30000 }),
+  getVisitBrief: (id: number) =>
+    request<VisitBrief>(`/accounts/${id}/visit-brief`, { timeoutMs: 30000 }),
+  ask: (question: string) =>
+    request<AskResponse>('/ask', { method: 'POST', body: JSON.stringify({ question }), timeoutMs: 30000 }),
+  search: (q: string) =>
+    request<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
+  getWeeklyBrief: () =>
+    request<WeeklyBrief>('/weekly-brief', { timeoutMs: 30000 }),
+
+  extractFromImage: (imageBase64: string, mediaType: string) =>
+    request<{ extracted_text: string }>('/extract-from-image', {
+      method: 'POST',
+      body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType }),
+      timeoutMs: 30000,
+    }),
+
+  getAccountEmails: (accountId: number) =>
+    request<EmailThread[]>(`/email/threads?account_id=${accountId}`, { timeoutMs: 20000 }),
 };

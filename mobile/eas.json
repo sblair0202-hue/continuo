@@ -1,0 +1,44 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.204:8001"
+      }
+    },
+    "preview": {
+      "distribution": "store",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.continuo.app"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.continuo.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "HR82ZR3953",
+        "ascApiKeyPath": "C:\\Users\\sblai\\Downloads\\AuthKey_8A5NRM47R9.p8",
+        "ascApiKeyId": "8A5NRM47R9",
+        "ascApiKeyIssuerId": "c931f723-f5cd-4cc1-8bcc-896d2b8671d3"
+      }
+    }
+  }
+}

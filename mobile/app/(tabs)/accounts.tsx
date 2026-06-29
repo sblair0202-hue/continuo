@@ -1,7 +1,6 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,102 +10,157 @@ import {
 } from 'react-native';
 
 import { api } from '../../src/api/client';
-import { Colors, momentumBadgeColor } from '../../src/constants/colors';
-import type { Account } from '../../src/types';
+import type { Account, Signal } from '../../src/types';
+
+// ── Design tokens (shared with home) ────────────────────────────────────────
+const C = {
+  bg:         '#FAF9F7',
+  ink:        '#383530',
+  ink2:       '#6E6A63',
+  ink3:       '#9E9A94',
+  muted:      '#908D87',
+  eyebrow:    '#A29E98',
+  rowDiv:     '#E9E6E3',
+  blue:       '#3A72C8',
+  green:      '#3D9E6A',
+  orange:     '#C87A3D',
+  red:        '#C94530',
+};
+
+function momentumColor(m: string): string {
+  if (['rising', 'increased', 'strong'].includes(m)) return C.green;
+  if (['declining', 'decreased', 'at_risk'].includes(m)) return C.red;
+  if (m === 'stable') return C.blue;
+  return C.muted;
+}
+
+const FILTER_LABELS: Record<string, string> = {
+  healthy:   'On Track',
+  attention: 'Needs Attention',
+  risks:     'Active Risks',
+  opps:      'Active Leads',
+};
 
 export default function AccountsScreen() {
-  const router = useRouter();
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router  = useRouter();
+  const { filter } = useLocalSearchParams<{ filter?: string }>();
 
-  function fetchAccounts(isRefresh = false) {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    api.getAccounts()
-      .then(setAccounts)
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [signals, setSignals]   = useState<Signal[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+
+  function fetchAll(isRefresh = false) {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    Promise.all([api.getAccounts(), api.getSignals()])
+      .then(([a, s]) => { setAccounts(a); setSignals(s); })
       .catch((e: Error) => setError(e.message))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }
 
-  useFocusEffect(useCallback(() => { fetchAccounts(); }, []));
+  useFocusEffect(useCallback(() => { fetchAll(); }, []));
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
+  const filtered = useMemo(() => {
+    if (!filter) return accounts;
+    if (filter === 'healthy')
+      return accounts.filter(a => ['rising', 'stable', 'increased', 'strong'].includes(a.momentum));
+    if (filter === 'attention')
+      return accounts.filter(a => ['declining', 'decreased', 'at_risk', 'unknown'].includes(a.momentum));
+    if (filter === 'risks') {
+      const ids = new Set(signals.filter(s => s.signal_type === 'risk' && s.status === 'new').map(s => s.account_id));
+      return accounts.filter(a => ids.has(a.id));
+    }
+    if (filter === 'opps') {
+      const ids = new Set(signals.filter(s => s.signal_type === 'opportunity' && s.status === 'new').map(s => s.account_id));
+      return accounts.filter(a => ids.has(a.id));
+    }
+    return accounts;
+  }, [accounts, signals, filter]);
 
   return (
     <ScrollView
-      contentContainerStyle={styles.scroll}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => fetchAccounts(true)} tintColor={Colors.primary} />
-      }
+      style={s.screen}
+      contentContainerStyle={s.scroll}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={C.blue} />}
     >
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {/* Header row */}
+      <View style={s.headerRow}>
+        {filter ? (
+          <TouchableOpacity onPress={() => router.push('/(tabs)/accounts')} activeOpacity={0.7}>
+            <Text style={s.filterActive}>{FILTER_LABELS[filter] ?? filter}  ✕</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={s.headerCount}>{loading ? '' : `${accounts.length} accounts`}</Text>
+        )}
+        <TouchableOpacity onPress={() => router.push('/referral-guide')} activeOpacity={0.7}>
+          <Text style={s.referralLink}>Referral Guide</Text>
+        </TouchableOpacity>
+      </View>
 
-      {accounts.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No accounts yet.</Text>
-          <Text style={styles.emptySubtitle}>Submit a recap to create your first account.</Text>
+      {error && <Text style={s.errorText}>{error}</Text>}
+
+      {loading ? null : filtered.length === 0 ? (
+        <View style={s.empty}>
+          <Text style={s.emptyTitle}>{filter ? 'No accounts match.' : 'No accounts yet.'}</Text>
+          <Text style={s.emptySub}>
+            {filter ? 'Tap above to clear the filter.' : 'Submit a recap to create your first account.'}
+          </Text>
         </View>
       ) : (
-        accounts.map((account) => (
-          <TouchableOpacity
-            key={account.id}
-            style={styles.card}
-            onPress={() => router.push(`/account/${account.id}`)}
-          >
-            <View style={styles.cardRow}>
-              <View style={styles.cardInfo}>
-                <Text style={styles.accountName}>{account.name}</Text>
-                {account.city && (
-                  <Text style={styles.accountLocation}>
-                    {account.city}{account.state ? `, ${account.state}` : ''}
+        <View style={s.list}>
+          {filtered.map((account, i) => (
+            <TouchableOpacity
+              key={account.id}
+              style={[s.row, i < filtered.length - 1 && s.rowBorder]}
+              onPress={() => router.push(`/account/${account.id}`)}
+              activeOpacity={0.6}
+            >
+              <View style={s.rowLeft}>
+                <Text style={s.name}>{account.name}</Text>
+                {(account.organization && account.organization !== account.name) || account.city ? (
+                  <Text style={s.sub}>
+                    {[account.organization !== account.name ? account.organization : null, account.city]
+                      .filter(Boolean).join(' · ')}
                   </Text>
-                )}
-                {account.next_action && (
-                  <Text style={styles.nextAction}>{account.next_action}</Text>
-                )}
+                ) : null}
+                {account.next_action ? (
+                  <Text style={s.nextAction} numberOfLines={1}>{account.next_action}</Text>
+                ) : null}
               </View>
-              <View style={[styles.momentumBadge, { backgroundColor: momentumBadgeColor(account.momentum) }]}>
-                <Text style={styles.momentumText}>{account.momentum}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))
+              <View style={[s.dot, { backgroundColor: momentumColor(account.momentum) }]} />
+            </TouchableOpacity>
+          ))}
+        </View>
       )}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { padding: 16 },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.bg },
+  scroll: { paddingHorizontal: 26, paddingBottom: 40 },
+
+  headerRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: 20, paddingBottom: 16,
   },
-  cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardInfo: { flex: 1, marginRight: 10 },
-  accountName: { fontSize: 16, fontWeight: '700', color: Colors.text },
-  accountLocation: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  nextAction: { fontSize: 13, color: Colors.primary, marginTop: 6, fontStyle: 'italic' },
-  momentumBadge: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  momentumText: { fontSize: 11, fontWeight: '600', color: Colors.surface },
-  emptyState: { marginTop: 80, alignItems: 'center', paddingHorizontal: 24 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  errorText: { fontSize: 14, color: Colors.high, marginBottom: 8 },
+  headerCount:  { fontSize: 12, color: C.muted, fontWeight: '500' },
+  filterActive: { fontSize: 12, fontWeight: '600', color: C.blue },
+  referralLink: { fontSize: 12, color: C.muted, fontWeight: '500' },
+
+  list:      { borderTopWidth: 1, borderTopColor: C.rowDiv },
+  row:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 14 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.rowDiv },
+  rowLeft:   { flex: 1 },
+
+  name:       { fontSize: 15.5, fontWeight: '600', color: C.ink, lineHeight: 22 },
+  sub:        { fontSize: 12.5, color: C.ink3, marginTop: 2, lineHeight: 18 },
+  nextAction: { fontSize: 13, color: C.ink2, marginTop: 5, lineHeight: 19 },
+  dot:        { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+
+  empty:     { marginTop: 80, alignItems: 'center', paddingHorizontal: 32 },
+  emptyTitle:{ fontSize: 16, fontWeight: '600', color: C.ink, textAlign: 'center', marginBottom: 8 },
+  emptySub:  { fontSize: 14, color: C.ink3, textAlign: 'center', lineHeight: 22 },
+  errorText: { fontSize: 13, color: C.red, marginBottom: 12 },
 });
