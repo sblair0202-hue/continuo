@@ -20,9 +20,25 @@ def connect():
 
 
 @router.get("/callback")
-def callback(code: str, db: Session = Depends(get_db)):
+def callback(code: str, state: str | None = None, error: str | None = None, db: Session = Depends(get_db)):
     """Google redirects here after user approves access."""
-    token_data = calendar_service.exchange_code(code)
+    if error:
+        return HTMLResponse(f"""
+        <html><body style="font-family:sans-serif;padding:40px;text-align:center">
+          <h2>❌ Calendar connection cancelled</h2>
+          <p>{error}</p><p>You can close this tab and try again from Continuo settings.</p>
+        </body></html>
+        """)
+    try:
+        token_data = calendar_service.exchange_code(code, state)
+    except Exception as exc:
+        return HTMLResponse(f"""
+        <html><body style="font-family:sans-serif;padding:40px;text-align:center">
+          <h2>❌ Could not connect Calendar</h2>
+          <p style="color:#888;font-size:13px">{exc}</p>
+          <p>Close this tab and try again. Make sure your Google account is added as a test user in Google Cloud Console.</p>
+        </body></html>
+        """, status_code=400)
 
     token = db.query(CalendarToken).filter(CalendarToken.user_id == _OAUTH_CALLBACK_USER).first()
     if not token:

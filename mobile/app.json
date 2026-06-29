@@ -24,6 +24,10 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
+            "CFBundleURLName": "Continuo",
+            "CFBundleURLSchemes": ["continuo"]
+          },
+          {
             "CFBundleURLSchemes": ["com.googleusercontent.apps.196906565572-u239l185vgso2hjlqc851pql4108h584"]
           }
         ]
