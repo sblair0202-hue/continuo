@@ -31,11 +31,35 @@ def _extract_text(prop: dict) -> str:
     ptype = prop.get("type", "")
     if ptype == "title":
         parts = prop.get("title", [])
+        return "".join(p.get("plain_text", "") for p in parts).strip()
     elif ptype == "rich_text":
         parts = prop.get("rich_text", [])
+        return "".join(p.get("plain_text", "") for p in parts).strip()
+    elif ptype == "url":
+        return prop.get("url") or ""
+    elif ptype == "phone_number":
+        return prop.get("phone_number") or ""
+    elif ptype == "email":
+        return prop.get("email") or ""
+    elif ptype == "select":
+        sel = prop.get("select")
+        return sel.get("name", "") if sel else ""
+    elif ptype == "multi_select":
+        return ", ".join(s["name"] for s in prop.get("multi_select", []))
+    elif ptype == "checkbox":
+        return "true" if prop.get("checkbox") else ""
     else:
         return ""
-    return "".join(p.get("plain_text", "") for p in parts).strip()
+
+
+def _get_prop(props: dict, *keys: str) -> str | None:
+    """Try multiple property key names and return the first non-empty value."""
+    for key in keys:
+        if key in props:
+            val = _extract_text(props[key])
+            if val:
+                return val
+    return None
 
 
 def import_accounts_from_notion(database_id: str) -> list[dict]:
@@ -74,22 +98,14 @@ def import_accounts_from_notion(database_id: str) -> list[dict]:
             if not name:
                 continue
 
-            status = next(
-                (_extract_text(props[k]) for k in ("Status", "status") if k in props), None
-            )
-            momentum = next(
-                (_extract_text(props[k]) for k in ("Momentum", "momentum") if k in props), None
-            )
-            next_action = next(
-                (_extract_text(props[k]) for k in ("Next Action", "next_action") if k in props), None
-            )
-            location = next(
-                (_extract_text(props[k]) for k in ("Location", "location") if k in props), None
-            )
+            status = _get_prop(props, "Status", "status")
+            momentum = _get_prop(props, "Momentum", "momentum")
+            next_action = _get_prop(props, "Next Action", "next_action", "Next Steps", "Action Items")
+            location = _get_prop(props, "Location", "location", "City, State")
             city, state = None, None
             if location and "," in location:
-                parts = [p.strip() for p in location.split(",", 1)]
-                city, state = parts[0], parts[1]
+                loc_parts = [p.strip() for p in location.split(",", 1)]
+                city, state = loc_parts[0], loc_parts[1]
             elif location:
                 city = location
 
@@ -101,6 +117,19 @@ def import_accounts_from_notion(database_id: str) -> list[dict]:
                 "city": city,
                 "state": state,
                 "notion_page_id": page["id"],
+                # Referral & contact info
+                "address": _get_prop(props, "Address", "Street Address", "address"),
+                "phone": _get_prop(props, "Phone", "Phone Number", "Main Phone", "phone"),
+                "fax": _get_prop(props, "Fax", "Fax Number", "fax"),
+                "website": _get_prop(props, "Website", "URL", "Web", "website"),
+                "account_type": _get_prop(props, "Type", "Account Type", "Facility Type", "account_type"),
+                "referral_instructions": _get_prop(props, "Referral Instructions", "Referral Process", "Referral Protocol", "How to Refer", "referral_instructions"),
+                "scheduling_instructions": _get_prop(props, "Scheduling Instructions", "Scheduling Notes", "How to Schedule", "scheduling_instructions"),
+                "referral_contact": _get_prop(props, "Referral Contact", "Referral Coordinator", "Contact Name", "referral_contact"),
+                "referral_email": _get_prop(props, "Referral Email", "Contact Email", "Email", "referral_email"),
+                "preferred_referral_method": _get_prop(props, "Preferred Method", "Referral Method", "Submission Method", "preferred_referral_method"),
+                "insurance_notes": _get_prop(props, "Insurance Notes", "Insurance", "Payers", "Insurance Info", "insurance_notes"),
+                "vivistim_status": _get_prop(props, "Vivistim Status", "vivistim_status", "Device Status"),
             })
 
         if not data.get("has_more"):

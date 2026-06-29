@@ -61,24 +61,68 @@ def import_from_notion(db: Session = Depends(get_db), database_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Notion read failed: {e}")
 
-    existing_names = {a.name.lower() for a in db.query(Account).all()}
-    imported, skipped = 0, 0
+    existing_accounts = {a.name.lower(): a for a in db.query(Account).all()}
+    imported, updated, skipped = 0, 0, 0
+
+    _REFERRAL_FIELDS = (
+        "address", "phone", "fax", "website", "account_type",
+        "referral_instructions", "scheduling_instructions",
+        "referral_contact", "referral_email", "preferred_referral_method",
+        "insurance_notes", "vivistim_status",
+    )
 
     for data in notion_accounts:
-        if data["name"].lower() in existing_names:
-            skipped += 1
+        key = data["name"].lower()
+        if key in existing_accounts:
+            # Update referral/contact fields on the existing account
+            account = existing_accounts[key]
+            changed = False
+            for field in _REFERRAL_FIELDS:
+                val = data.get(field)
+                if val and not getattr(account, field, None):
+                    setattr(account, field, val)
+                    changed = True
+            # Also update city/state if missing
+            for field in ("city", "state", "next_action", "status"):
+                val = data.get(field)
+                if val and not getattr(account, field, None):
+                    setattr(account, field, val)
+                    changed = True
+            if changed:
+                db.add(account)
+                updated += 1
+            else:
+                skipped += 1
             continue
+
         account = Account(
             name=data["name"],
-            status=data["status"],
-            momentum=data["momentum"],
+            status=data.get("status") or "prospect",
+            momentum=data.get("momentum") or "unknown",
             next_action=data.get("next_action"),
             city=data.get("city"),
             state=data.get("state"),
+            address=data.get("address"),
+            phone=data.get("phone"),
+            fax=data.get("fax"),
+            website=data.get("website"),
+            account_type=data.get("account_type"),
+            referral_instructions=data.get("referral_instructions"),
+            scheduling_instructions=data.get("scheduling_instructions"),
+            referral_contact=data.get("referral_contact"),
+            referral_email=data.get("referral_email"),
+            preferred_referral_method=data.get("preferred_referral_method"),
+            insurance_notes=data.get("insurance_notes"),
+            vivistim_status=data.get("vivistim_status"),
         )
         db.add(account)
-        existing_names.add(data["name"].lower())
+        existing_accounts[key] = account
         imported += 1
 
     db.commit()
-    return {"imported": imported, "skipped": skipped, "total_in_notion": len(notion_accounts)}
+    return {
+        "imported": imported,
+        "updated": updated,
+        "skipped": skipped,
+        "total_in_notion": len(notion_accounts),
+    }

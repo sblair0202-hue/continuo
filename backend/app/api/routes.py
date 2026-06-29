@@ -23,15 +23,23 @@ def get_or_create_account(
     city: str | None = None,
     state: str | None = None,
 ) -> Account:
-    account = db.query(Account).filter(Account.name == name).first()
+    from sqlalchemy import func
+    account = db.query(Account).filter(func.lower(Account.name) == name.strip().lower()).first()
     if account:
         return account
 
-    account = Account(name=name, city=city, state=state)
+    account = Account(name=name.strip(), city=city, state=state)
     db.add(account)
     db.commit()
     db.refresh(account)
     return account
+
+
+@router.get("/voice-journal/recent")
+def list_recent_voice_journals(db: Session = Depends(get_db)):
+    """Debug endpoint: returns the 10 most recent voice journal entries."""
+    entries = db.query(VoiceJournalEntry).order_by(VoiceJournalEntry.id.desc()).limit(10).all()
+    return [{"id": e.id, "reviewed": e.reviewed, "approved": e.approved, "created_at": str(e.created_at)} for e in entries]
 
 
 @router.post("/extract-from-image")
