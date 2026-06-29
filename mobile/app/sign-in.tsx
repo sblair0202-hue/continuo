@@ -1,5 +1,8 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,13 +19,36 @@ import { Logo } from '../src/components/Logo';
 import { useAuth } from '../src/context/AuthContext';
 import { Colors, Radius, sp } from '../src/constants/colors';
 
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_IOS_CLIENT_ID = '196906565572-u239l185vgso2hjlqc851pql4108h584.apps.googleusercontent.com';
+
 export default function SignInScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle, loginWithApple } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [googleRequest, googleResponse, googlePrompt] = Google.useIdTokenAuthRequest({
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const idToken = googleResponse.params.id_token;
+      if (idToken) {
+        setLoading(true);
+        loginWithGoogle(idToken)
+          .then(() => router.replace('/(tabs)'))
+          .catch(e => setError(e instanceof Error ? e.message : 'Google sign-in failed.'))
+          .finally(() => setLoading(false));
+      }
+    } else if (googleResponse?.type === 'error') {
+      setError('Google sign-in was cancelled or failed.');
+    }
+  }, [googleResponse]);
 
   async function handleSignIn() {
     setError('');
@@ -105,24 +131,50 @@ export default function SignInScreen() {
           <View style={s.divLine} />
         </View>
 
-        {/* OAuth stubs */}
-        <TouchableOpacity
-          style={s.oauthBtn}
-          activeOpacity={0.8}
-          onPress={() =>
-            Alert.alert('Coming soon', 'Sign in with Apple will be available in a future update.')
-          }
-        >
-          <Text style={s.oauthIcon}></Text>
-          <Text style={s.oauthText}>Continue with Apple</Text>
-        </TouchableOpacity>
+        {/* Apple Sign-In */}
+        {Platform.OS === 'ios' ? (
+          <TouchableOpacity
+            style={s.oauthBtn}
+            activeOpacity={0.8}
+            disabled={loading}
+            onPress={async () => {
+              setError('');
+              try {
+                const credential = await AppleAuthentication.signInAsync({
+                  requestedScopes: [
+                    AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                    AppleAuthentication.AppleAuthenticationScope.EMAIL,
+                  ],
+                });
+                if (!credential.identityToken) throw new Error('No identity token from Apple.');
+                setLoading(true);
+                const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+                  .filter(Boolean).join(' ');
+                await loginWithApple(credential.identityToken, credential.email ?? undefined, fullName || undefined);
+                router.replace('/(tabs)');
+              } catch (e: any) {
+                if (e?.code !== 'ERR_REQUEST_CANCELED') {
+                  setError(e instanceof Error ? e.message : 'Apple sign-in failed.');
+                }
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            <Text style={s.oauthIcon}></Text>
+            <Text style={s.oauthText}>Continue with Apple</Text>
+          </TouchableOpacity>
+        ) : null}
 
+        {/* Google Sign-In */}
         <TouchableOpacity
           style={[s.oauthBtn, { marginTop: sp.sm }]}
           activeOpacity={0.8}
-          onPress={() =>
-            Alert.alert('Coming soon', 'Sign in with Google will be available in a future update.')
-          }
+          disabled={loading || !googleRequest}
+          onPress={() => {
+            setError('');
+            googlePrompt();
+          }}
         >
           <Text style={s.oauthIcon}>G</Text>
           <Text style={s.oauthText}>Continue with Google</Text>

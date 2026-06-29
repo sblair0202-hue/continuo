@@ -47,9 +47,10 @@ def sync(db: Session = Depends(get_db)):
 
 
 @router.post("/import")
-def import_from_notion(db: Session = Depends(get_db)):
-    """Pull accounts from Notion into Continuo. Skips accounts that already exist by name."""
-    database_id = os.getenv("NOTION_DATABASE_ID", "")
+def import_from_notion(db: Session = Depends(get_db), database_id: str = ""):
+    """Pull accounts from Notion into Continuo. Skips accounts that already exist by name.
+    Pass ?database_id=... to import from a specific database, otherwise uses NOTION_DATABASE_ID env var."""
+    database_id = database_id or os.getenv("NOTION_DATABASE_ID", "")
     if not os.getenv("NOTION_TOKEN", ""):
         raise HTTPException(status_code=400, detail="NOTION_TOKEN not set")
     if not database_id:

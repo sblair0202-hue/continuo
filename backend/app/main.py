@@ -22,6 +22,20 @@ from app.services.auth_service import seed_admin
 
 Base.metadata.create_all(bind=engine)
 
+# Inline migration: add OAuth columns if missing (handles existing Railway DB)
+try:
+    from sqlalchemy import inspect, text as _text
+    _insp = inspect(engine)
+    _user_cols = [c["name"] for c in _insp.get_columns("users")]
+    with engine.connect() as _conn:
+        if "oauth_provider" not in _user_cols:
+            _conn.execute(_text("ALTER TABLE users ADD COLUMN oauth_provider VARCHAR"))
+        if "oauth_id" not in _user_cols:
+            _conn.execute(_text("ALTER TABLE users ADD COLUMN oauth_id VARCHAR"))
+        _conn.commit()
+except Exception:
+    pass  # Table may not exist yet on first run; create_all handles it
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

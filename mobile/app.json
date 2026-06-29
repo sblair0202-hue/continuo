@@ -21,7 +21,12 @@
         "NSPhotoLibraryUsageDescription": "Continuo can access your photo library to attach images to field notes.",
         "NSFaceIDUsageDescription": "Continuo uses Face ID to securely unlock your session.",
         "NSContactsUsageDescription": "Continuo does not access your contacts.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["com.googleusercontent.apps.196906565572-u239l185vgso2hjlqc851pql4108h584"]
+          }
+        ]
       },
       "entitlements": {
         "com.apple.developer.applesignin": [
@@ -56,7 +61,9 @@
           "faceIDPermission": "Continuo uses Face ID to securely unlock your session."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "extra": {
       "apiUrl": {

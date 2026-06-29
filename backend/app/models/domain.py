@@ -233,10 +233,12 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
+    password_hash = Column(String, nullable=True)  # null for OAuth-only users
     display_name = Column(String, nullable=True)
     role = Column(String, default="standard")  # admin / standard
     is_active = Column(Boolean, default=True)
+    oauth_provider = Column(String, nullable=True)  # 'google' | 'apple' | null
+    oauth_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login_at = Column(DateTime, nullable=True)
 

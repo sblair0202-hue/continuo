@@ -37,6 +37,8 @@ interface AuthContextType {
   needsBiometricUnlock: boolean;
   biometricAvailable: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithApple: (identityToken: string, email?: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
   unlockWithBiometric: () => Promise<boolean>;
   skipBiometric: () => void;
@@ -81,30 +83,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+  async function _handleAuthResponse(res: Response) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail ?? 'Sign in failed. Check your email and password.');
+      throw new Error(err.detail ?? 'Sign in failed.');
     }
     const data: { access_token: string; user_id: string; display_name: string; role: string } =
       await res.json();
-
-    const newUser: AuthUser = {
-      user_id: data.user_id,
-      display_name: data.display_name,
-      role: data.role,
-    };
+    const newUser: AuthUser = { user_id: data.user_id, display_name: data.display_name, role: data.role };
     await storage.set(TOKEN_KEY, data.access_token);
     await storage.set(USER_KEY, JSON.stringify(newUser));
     tokenRef.current = data.access_token;
     setAuthToken(data.access_token);
     setNeedsBiometricUnlock(false);
     setUser(newUser);
+  }
+
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    await _handleAuthResponse(res);
+  }, []);
+
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: idToken }),
+    });
+    await _handleAuthResponse(res);
+  }, []);
+
+  const loginWithApple = useCallback(async (identityToken: string, email?: string, fullName?: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/apple`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity_token: identityToken, email, full_name: fullName }),
+    });
+    await _handleAuthResponse(res);
   }, []);
 
   const logout = useCallback(async () => {
@@ -149,6 +168,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         needsBiometricUnlock,
         biometricAvailable,
         login,
+        loginWithGoogle,
+        loginWithApple,
         logout,
         unlockWithBiometric,
         skipBiometric,
