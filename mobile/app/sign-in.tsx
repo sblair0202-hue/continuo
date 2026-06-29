@@ -12,7 +12,9 @@ import {
   View,
 } from 'react-native';
 
+import { Logo } from '../src/components/Logo';
 import { useAuth } from '../src/context/AuthContext';
+import { Colors, Radius, sp } from '../src/constants/colors';
 
 export default function SignInScreen() {
   const { login } = useAuth();
@@ -45,10 +47,13 @@ export default function SignInScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={s.inner}>
-        {/* Wordmark */}
+
+        {/* Logo lockup */}
         <View style={s.header}>
-          <Text style={s.wordmark}>Continuo</Text>
-          <Text style={s.tagline}>Your AI field intelligence platform</Text>
+          <Logo variant="full" scheme="default" size={56} />
+          <Text style={s.tagline}>
+            Never drop the thread.
+          </Text>
         </View>
 
         {/* Form */}
@@ -59,20 +64,20 @@ export default function SignInScreen() {
             value={email}
             onChangeText={setEmail}
             placeholder="you@example.com"
-            placeholderTextColor="#B0ABA4"
+            placeholderTextColor={Colors.stone}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
             returnKeyType="next"
           />
 
-          <Text style={[s.label, { marginTop: 18 }]}>Password</Text>
+          <Text style={[s.label, { marginTop: sp.md }]}>Password</Text>
           <TextInput
             style={s.input}
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
-            placeholderTextColor="#B0ABA4"
+            placeholderTextColor={Colors.stone}
             secureTextEntry
             returnKeyType="done"
             onSubmitEditing={handleSignIn}
@@ -86,11 +91,10 @@ export default function SignInScreen() {
             activeOpacity={0.85}
             disabled={loading}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.btnText}>Sign in</Text>
-            )}
+            {loading
+              ? <ActivityIndicator color={Colors.reversed} />
+              : <Text style={s.btnText}>Sign in</Text>
+            }
           </TouchableOpacity>
         </View>
 
@@ -101,30 +105,30 @@ export default function SignInScreen() {
           <View style={s.divLine} />
         </View>
 
-        {/* OAuth stubs — active in TestFlight build */}
+        {/* OAuth stubs */}
         <TouchableOpacity
           style={s.oauthBtn}
           activeOpacity={0.8}
           onPress={() =>
-            Alert.alert('Coming in TestFlight', 'Sign in with Apple will be available in the native app build.')
+            Alert.alert('Coming soon', 'Sign in with Apple will be available in a future update.')
           }
         >
-          <Text style={s.oauthIcon}>  </Text>
+          <Text style={s.oauthIcon}></Text>
           <Text style={s.oauthText}>Continue with Apple</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[s.oauthBtn, { marginTop: 10 }]}
+          style={[s.oauthBtn, { marginTop: sp.sm }]}
           activeOpacity={0.8}
           onPress={() =>
-            Alert.alert('Coming in TestFlight', 'Sign in with Google will be available in the native app build.')
+            Alert.alert('Coming soon', 'Sign in with Google will be available in a future update.')
           }
         >
           <Text style={s.oauthIcon}>G</Text>
           <Text style={s.oauthText}>Continue with Google</Text>
         </TouchableOpacity>
 
-        {/* Privacy footer */}
+        {/* Footer */}
         <Text style={s.privacy}>
           By signing in you agree to our{' '}
           <Text style={s.privacyLink}>Privacy Policy</Text>
@@ -132,72 +136,138 @@ export default function SignInScreen() {
           <Text style={s.privacyLink}>Terms of Use</Text>.
           {'\n'}Your data stays private and secure.
         </Text>
+
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const C = {
-  bg: '#FAF9F7',
-  ink: '#383530',
-  ink2: '#6E6A63',
-  ink3: '#9E9A94',
-  muted: '#B0ABA4',
-  border: '#E0DDD9',
-  btn: '#3D3A35',
-  blue: '#3A72C8',
-  surface: '#F0EDE9',
-};
-
 const s = StyleSheet.create({
-  screen:   { flex: 1, backgroundColor: C.bg },
-  inner:    { flex: 1, paddingHorizontal: 32, justifyContent: 'center', paddingBottom: 32 },
-
-  header:   { alignItems: 'center', marginBottom: 44 },
-  wordmark: { fontSize: 34, fontFamily: 'Georgia', color: C.ink, letterSpacing: -0.5 },
-  tagline:  { marginTop: 8, fontSize: 14, color: C.ink3, fontWeight: '400' },
-
-  form:     { gap: 0 },
-  label:    { fontSize: 12, fontWeight: '600', color: C.ink2, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 },
-  input:    {
-    backgroundColor: C.surface,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: C.ink,
-    borderWidth: 1,
-    borderColor: C.border,
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.paper,
   },
-  btn:      {
-    marginTop: 28,
-    backgroundColor: C.btn,
-    borderRadius: 12,
+  inner: {
+    flex: 1,
+    paddingHorizontal: sp.xl,
+    justifyContent: 'center',
+    paddingBottom: sp.xl,
+  },
+
+  // Header
+  header: {
+    alignItems: 'center',
+    marginBottom: sp.xxl,
+  },
+  tagline: {
+    marginTop: sp.md,
+    fontFamily: 'Newsreader_400Regular_Italic',
+    fontSize: 15,
+    color: Colors.graphite,
+    letterSpacing: 0.1,
+  },
+
+  // Form
+  form: {
+    gap: 0,
+  },
+  label: {
+    fontFamily: 'HankenGrotesk_600SemiBold',
+    fontSize: 11,
+    color: Colors.graphite,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: sp.sm,
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.sm,
+    paddingHorizontal: sp.md,
+    paddingVertical: 14,
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 16,
+    color: Colors.ink,
+    borderWidth: 1,
+    borderColor: Colors.mist,
+  },
+  errorText: {
+    marginTop: sp.md,
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 14,
+    color: Colors.rose,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  btn: {
+    marginTop: sp.lg,
+    backgroundColor: Colors.inkDark,
+    borderRadius: Radius.sm,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  btnDisabled: { opacity: 0.6 },
-  btnText:  { color: '#fff', fontSize: 16, fontWeight: '600' },
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  btnText: {
+    fontFamily: 'HankenGrotesk_600SemiBold',
+    color: Colors.reversed,
+    fontSize: 16,
+    letterSpacing: 0.2,
+  },
 
-  divRow:   { flexDirection: 'row', alignItems: 'center', marginVertical: 28 },
-  divLine:  { flex: 1, height: 1, backgroundColor: C.border },
-  divLabel: { marginHorizontal: 14, fontSize: 13, color: C.muted },
+  // Divider
+  divRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: sp.lg,
+  },
+  divLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.mist,
+  },
+  divLabel: {
+    marginHorizontal: sp.md,
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 13,
+    color: Colors.stone,
+  },
 
+  // OAuth
   oauthBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    backgroundColor: C.surface,
-    borderRadius: 12,
+    gap: sp.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.sm,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: Colors.mist,
   },
-  oauthIcon: { fontSize: 16, fontWeight: '700', color: C.ink, width: 22, textAlign: 'center' },
-  oauthText: { fontSize: 15, fontWeight: '500', color: C.ink },
+  oauthIcon: {
+    fontFamily: 'HankenGrotesk_700Bold',
+    fontSize: 16,
+    color: Colors.ink,
+    width: 22,
+    textAlign: 'center',
+  },
+  oauthText: {
+    fontFamily: 'HankenGrotesk_500Medium',
+    fontSize: 15,
+    color: Colors.ink,
+  },
 
-  errorText:   { marginTop: 14, fontSize: 14, color: '#C94530', textAlign: 'center', lineHeight: 20 },
-  privacy:     { marginTop: 36, fontSize: 12, color: C.muted, textAlign: 'center', lineHeight: 18 },
-  privacyLink: { color: C.blue, fontWeight: '500' },
+  // Privacy footer
+  privacy: {
+    marginTop: sp.xxl - sp.md,
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 12,
+    color: Colors.stone,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  privacyLink: {
+    color: Colors.sky,
+  },
 });
