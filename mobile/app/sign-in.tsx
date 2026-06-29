@@ -1,12 +1,11 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -16,39 +15,17 @@ import {
 } from 'react-native';
 
 import { Logo } from '../src/components/Logo';
+import { API_BASE_URL } from '../src/api/client';
 import { useAuth } from '../src/context/AuthContext';
 import { Colors, Radius, sp } from '../src/constants/colors';
 
-WebBrowser.maybeCompleteAuthSession();
-
-const GOOGLE_IOS_CLIENT_ID = '196906565572-u239l185vgso2hjlqc851pql4108h584.apps.googleusercontent.com';
-
 export default function SignInScreen() {
-  const { login, loginWithGoogle, loginWithApple } = useAuth();
+  const { login, loginWithApple } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [googleRequest, googleResponse, googlePrompt] = Google.useIdTokenAuthRequest({
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-  });
-
-  useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const idToken = googleResponse.params.id_token;
-      if (idToken) {
-        setLoading(true);
-        loginWithGoogle(idToken)
-          .then(() => router.replace('/(tabs)'))
-          .catch(e => setError(e instanceof Error ? e.message : 'Google sign-in failed.'))
-          .finally(() => setLoading(false));
-      }
-    } else if (googleResponse?.type === 'error') {
-      setError('Google sign-in was cancelled or failed.');
-    }
-  }, [googleResponse]);
 
   async function handleSignIn() {
     setError('');
@@ -170,10 +147,12 @@ export default function SignInScreen() {
         <TouchableOpacity
           style={[s.oauthBtn, { marginTop: sp.sm }]}
           activeOpacity={0.8}
-          disabled={loading || !googleRequest}
+          disabled={loading}
           onPress={() => {
             setError('');
-            googlePrompt();
+            Linking.openURL(`${API_BASE_URL}/auth/google-connect`).catch(() =>
+              setError('Could not open browser for Google sign-in.')
+            );
           }}
         >
           <Text style={s.oauthIcon}>G</Text>

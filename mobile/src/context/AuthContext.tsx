@@ -39,6 +39,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   loginWithApple: (identityToken: string, email?: string, fullName?: string) => Promise<void>;
+  loginWithToken: (token: string, userId: string, displayName: string, role: string) => Promise<void>;
   logout: () => Promise<void>;
   unlockWithBiometric: () => Promise<boolean>;
   skipBiometric: () => void;
@@ -117,6 +118,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await _handleAuthResponse(res);
   }, []);
 
+  const loginWithToken = useCallback(async (token: string, userId: string, displayName: string, role: string) => {
+    const newUser: AuthUser = { user_id: userId, display_name: displayName, role };
+    await storage.set(TOKEN_KEY, token);
+    await storage.set(USER_KEY, JSON.stringify(newUser));
+    tokenRef.current = token;
+    setAuthToken(token);
+    setNeedsBiometricUnlock(false);
+    setUser(newUser);
+  }, []);
+
   const loginWithApple = useCallback(async (identityToken: string, email?: string, fullName?: string) => {
     const res = await fetch(`${API_BASE_URL}/auth/apple`, {
       method: 'POST',
@@ -170,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         loginWithGoogle,
         loginWithApple,
+        loginWithToken,
         logout,
         unlockWithBiometric,
         skipBiometric,

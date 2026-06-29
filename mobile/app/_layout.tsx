@@ -30,7 +30,7 @@ function RootNavigator() {
   useEffect(() => {
     if (isLoading) return;
     const seg0 = segments[0] as string | undefined;
-    const inAuth = seg0 === 'sign-in' || seg0 === 'biometric-unlock';
+    const inAuth = seg0 === 'sign-in' || seg0 === 'biometric-unlock' || seg0 === 'auth';
 
     if (!user && !inAuth) {
       router.replace('/sign-in');
@@ -66,6 +66,7 @@ function RootNavigator() {
       <Stack.Screen name="account/[id]" options={{ title: 'Account', headerBackTitle: 'Back' }} />
       <Stack.Screen name="meeting/[id]" options={{ title: 'Meeting Prep' }} />
       <Stack.Screen name="referral-guide" options={{ title: 'Referral Guide', presentation: 'modal' }} />
+      <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
     </Stack>
   );
 }
