@@ -6,51 +6,49 @@ from datetime import datetime, timedelta, timezone
 import anthropic
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 REDIRECT_URI = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8000/email/callback")
 
-CLIENT_CONFIG = {
-    "web": {
-        "client_id": os.getenv("GOOGLE_WEB_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID", ""),
-        "client_secret": os.getenv("GOOGLE_WEB_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET", ""),
-        "redirect_uris": [REDIRECT_URI],
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-    }
-}
-
-
-_pkce_store: dict[str, str] = {}
+_CLIENT_ID     = lambda: os.getenv("GOOGLE_WEB_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID", "")
+_CLIENT_SECRET = lambda: os.getenv("GOOGLE_WEB_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 
 def get_auth_url() -> str:
-    flow = Flow.from_client_config(CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI)
-    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    cv = getattr(getattr(flow, "oauth2session", None), "code_verifier", None) or getattr(flow, "code_verifier", None)
-    if cv and state:
-        _pkce_store[state] = cv
-    return auth_url
+    import secrets, urllib.parse
+    params = {
+        "client_id":     _CLIENT_ID(),
+        "redirect_uri":  REDIRECT_URI,
+        "response_type": "code",
+        "scope":         " ".join(SCOPES),
+        "access_type":   "offline",
+        "prompt":        "consent",
+        "state":         secrets.token_urlsafe(24),
+    }
+    return "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
 
 
 def exchange_code(code: str, state: str | None = None) -> dict:
-    flow = Flow.from_client_config(CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI)
-    if state and state in _pkce_store:
-        cv = _pkce_store.pop(state)
-        sess = getattr(flow, "oauth2session", None)
-        if sess is not None:
-            sess.code_verifier = cv
-    flow.fetch_token(code=code)
-    creds = flow.credentials
+    import requests as _req
+    resp = _req.post("https://oauth2.googleapis.com/token", data={
+        "code":          code,
+        "client_id":     _CLIENT_ID(),
+        "client_secret": _CLIENT_SECRET(),
+        "redirect_uri":  REDIRECT_URI,
+        "grant_type":    "authorization_code",
+    })
+    if not resp.ok:
+        raise ValueError(f"Token exchange failed: {resp.text}")
+    data = resp.json()
+    expiry = datetime.utcnow() + timedelta(seconds=data.get("expires_in", 3600))
     return {
-        "access_token": creds.token,
-        "refresh_token": creds.refresh_token,
-        "token_uri": creds.token_uri,
-        "scopes": json.dumps(list(creds.scopes or SCOPES)),
-        "expiry": creds.expiry,
+        "access_token":  data["access_token"],
+        "refresh_token": data.get("refresh_token"),
+        "token_uri":     "https://oauth2.googleapis.com/token",
+        "scopes":        json.dumps(SCOPES),
+        "expiry":        expiry,
     }
 
 

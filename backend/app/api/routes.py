@@ -63,39 +63,6 @@ def get_review_queue(db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/transcribe")
-def transcribe_audio(payload: dict):
-    """Transcribe base64-encoded audio using OpenAI Whisper."""
-    import base64, tempfile, os as _os
-    audio_b64 = payload.get("audio_base64", "")
-    audio_format = payload.get("format", "m4a")
-    if not audio_b64:
-        raise HTTPException(status_code=400, detail="audio_base64 is required")
-
-    openai_key = _os.getenv("OPENAI_API_KEY", "")
-    if not openai_key:
-        raise HTTPException(status_code=503, detail="Transcription is not configured. Add OPENAI_API_KEY to Railway settings.")
-
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=openai_key)
-        audio_bytes = base64.b64decode(audio_b64)
-        with tempfile.NamedTemporaryFile(suffix=f".{audio_format}", delete=False) as f:
-            f.write(audio_bytes)
-            tmp_path = f.name
-        try:
-            with open(tmp_path, "rb") as audio_file:
-                result = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    language="en",
-                )
-            return {"transcript": result.text}
-        finally:
-            _os.unlink(tmp_path)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
-
 
 @router.post("/extract-from-image")
 def extract_from_image(payload: dict):

@@ -1,10 +1,8 @@
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -22,7 +20,7 @@ import { api } from '../src/api/client';
 import { useAuth } from '../src/context/AuthContext';
 import { Colors, Radius, Shadow, sp } from '../src/constants/colors';
 
-type Phase = 'idle' | 'recording' | 'transcribing' | 'editing' | 'analyzing';
+type Phase = 'idle' | 'recording' | 'editing' | 'analyzing';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -37,18 +35,45 @@ export default function VoiceCaptureScreen() {
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
 
+  // Live transcription events
+  useSpeechRecognitionEvent('result', (event) => {
+    const latest = event.results[0]?.transcript ?? '';
+    if (event.isFinal) {
+      setTranscript(prev => {
+        const joined = prev.trim() ? `${prev.trim()} ${latest}` : latest;
+        return joined;
+      });
+      setInterimTranscript('');
+    } else {
+      setInterimTranscript(latest);
+    }
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    // iOS stops recognition after ~60s of silence — auto-restart if still recording
+    if (phase === 'recording') {
+      ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false });
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    if (event.error === 'no-speech') return; // ignore silence timeouts
+    setError(`Recognition error: ${event.message ?? event.error}`);
+    stopRecording();
+  });
+
   useEffect(() => {
     return () => {
       timerRef.current && clearInterval(timerRef.current);
-      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+      ExpoSpeechRecognitionModule.abort();
     };
   }, []);
 
@@ -69,89 +94,54 @@ export default function VoiceCaptureScreen() {
 
   async function startRecording() {
     setError(null);
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Microphone access needed', 'Please allow microphone access in Settings to record voice notes.');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await rec.startAsync();
-      recordingRef.current = rec;
-
-      setDuration(0);
-      setPhase('recording');
-      startPulse();
-      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start recording.');
+    const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!granted) {
+      setError('Microphone and speech recognition access is needed. Please allow in Settings.');
+      return;
     }
+
+    setTranscript('');
+    setInterimTranscript('');
+    setDuration(0);
+    setPhase('recording');
+    startPulse();
+
+    timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false });
   }
 
-  async function stopRecording() {
+  function stopRecording() {
     stopPulse();
     timerRef.current && clearInterval(timerRef.current);
-
-    const rec = recordingRef.current;
-    if (!rec) return;
-    recordingRef.current = null;
-
-    setPhase('transcribing');
-    try {
-      await rec.stopAndUnloadAsync();
-      const uri = rec.getURI();
-      if (!uri) throw new Error('No audio file found.');
-
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const { transcript: text } = await api.transcribeAudio(base64, 'm4a');
-      setTranscript(text);
-      setPhase('editing');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Transcription failed. Please try again.');
-      setPhase('idle');
-    }
+    ExpoSpeechRecognitionModule.stop();
+    setInterimTranscript('');
+    setPhase('editing');
   }
 
   async function handleAnalyze() {
-    if (!transcript.trim()) return;
+    const text = transcript.trim();
+    if (!text) return;
     setError(null);
     setPhase('analyzing');
     try {
       const userId = user?.user_id ?? 'sarah';
-      const result = await api.submitRecap(userId, transcript.trim());
+      const result = await api.submitRecap(userId, text);
       router.replace({
         pathname: '/review/[id]',
         params: { id: result.id, preview: JSON.stringify(result.extraction_preview) },
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Analysis failed. Your transcript is saved — tap Analyze to retry.');
+      setError(e instanceof Error ? e.message : 'Analysis failed. Tap Analyze to retry.');
       setPhase('editing');
     }
   }
 
-  function handleRecordButton() {
-    if (phase === 'idle' || phase === 'editing') {
-      setTranscript('');
-      startRecording();
-    } else if (phase === 'recording') {
-      stopRecording();
-    }
-  }
-
   const isRecording = phase === 'recording';
-  const isTranscribing = phase === 'transcribing';
   const isAnalyzing = phase === 'analyzing';
   const isEditing = phase === 'editing';
+  const displayText = isRecording
+    ? (transcript ? `${transcript} ${interimTranscript}` : interimTranscript).trim()
+    : transcript;
 
   return (
     <KeyboardAvoidingView
@@ -163,46 +153,46 @@ export default function VoiceCaptureScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        {/* Header */}
         <Text style={s.heading}>Voice Note</Text>
         <Text style={s.sub}>
-          {phase === 'idle' && 'Tap the mic to start recording'}
-          {phase === 'recording' && `Recording  ${formatDuration(duration)}`}
-          {phase === 'transcribing' && 'Transcribing your recording...'}
-          {phase === 'editing' && 'Review and edit before analyzing'}
-          {phase === 'analyzing' && 'Analyzing with AI...'}
+          {phase === 'idle'     && 'Tap the mic to start'}
+          {phase === 'recording'&& `Listening  ${formatDuration(duration)}`}
+          {phase === 'editing'  && 'Review and edit before analyzing'}
+          {phase === 'analyzing'&& 'Analyzing with AI...'}
         </Text>
 
-        {/* Record button */}
+        {/* Record / Stop button */}
         {(phase === 'idle' || phase === 'recording') && (
           <View style={s.orbWrap}>
             <Animated.View style={[s.orbRing, isRecording && s.orbRingActive, { transform: [{ scale: pulseAnim }] }]}>
               <TouchableOpacity
                 style={[s.orb, isRecording && s.orbActive]}
-                onPress={handleRecordButton}
+                onPress={isRecording ? stopRecording : startRecording}
                 activeOpacity={0.8}
               >
                 <Text style={s.orbIcon}>{isRecording ? '⏹' : '🎙'}</Text>
               </TouchableOpacity>
             </Animated.View>
+
             {isRecording && (
               <View style={s.recIndicator}>
                 <View style={s.recDot} />
                 <Text style={s.recLabel}>REC</Text>
               </View>
             )}
+
+            {/* Live transcript while recording */}
+            {isRecording && displayText ? (
+              <View style={s.liveBox}>
+                <Text style={s.liveText}>{displayText}</Text>
+              </View>
+            ) : isRecording ? (
+              <Text style={s.listeningHint}>Listening — start speaking...</Text>
+            ) : null}
           </View>
         )}
 
-        {/* Transcribing spinner */}
-        {isTranscribing && (
-          <View style={s.spinnerWrap}>
-            <ActivityIndicator size="large" color={Colors.sky} />
-            <Text style={s.spinnerLabel}>Transcribing...</Text>
-          </View>
-        )}
-
-        {/* Editable transcript */}
+        {/* Editable transcript after stop */}
         {(isEditing || isAnalyzing) && (
           <View style={s.transcriptWrap}>
             <Text style={s.transcriptLabel}>Transcript</Text>
@@ -211,27 +201,27 @@ export default function VoiceCaptureScreen() {
               multiline
               value={transcript}
               onChangeText={setTranscript}
-              placeholder="Transcript will appear here..."
+              placeholder="Your words will appear here..."
               placeholderTextColor={Colors.graphite}
               textAlignVertical="top"
               editable={!isAnalyzing}
+              autoFocus
             />
             <TouchableOpacity
-              style={[s.rerecordBtn]}
+              style={s.rerecordBtn}
               onPress={() => { setPhase('idle'); setTranscript(''); setDuration(0); }}
               disabled={isAnalyzing}
             >
-              <Text style={s.rerecordText}>🎙  Re-record</Text>
+              <Text style={s.rerecordText}>🎙  Record again</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {error && <Text style={s.error}>{error}</Text>}
 
-        {/* Analyze button */}
         {(isEditing || isAnalyzing) && (
           <TouchableOpacity
-            style={[s.analyzeBtn, isAnalyzing && s.analyzeBtnDisabled]}
+            style={[s.analyzeBtn, (isAnalyzing || !transcript.trim()) && s.analyzeBtnDisabled]}
             onPress={handleAnalyze}
             disabled={isAnalyzing || !transcript.trim()}
             activeOpacity={0.8}
@@ -274,8 +264,9 @@ const s = StyleSheet.create({
   },
   orbWrap: {
     alignItems: 'center',
-    marginVertical: sp.xl,
+    width: '100%',
     gap: sp.md,
+    marginVertical: sp.lg,
   },
   orbRing: {
     width: 120,
@@ -321,15 +312,26 @@ const s = StyleSheet.create({
     color: Colors.rose,
     letterSpacing: 2,
   },
-  spinnerWrap: {
-    alignItems: 'center',
-    gap: sp.md,
-    marginVertical: sp.xxl,
+  liveBox: {
+    width: '100%',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    borderColor: Colors.mist,
+    padding: sp.md,
+    minHeight: 80,
   },
-  spinnerLabel: {
+  liveText: {
     fontFamily: 'HankenGrotesk_400Regular',
-    fontSize: 14,
+    fontSize: 15,
+    color: Colors.ink,
+    lineHeight: 22,
+  },
+  listeningHint: {
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 13,
     color: Colors.graphite,
+    fontStyle: 'italic',
   },
   transcriptWrap: {
     width: '100%',

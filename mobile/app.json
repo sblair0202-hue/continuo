@@ -25,10 +25,14 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "Continuo",
-            "CFBundleURLSchemes": ["continuo"]
+            "CFBundleURLSchemes": [
+              "continuo"
+            ]
           },
           {
-            "CFBundleURLSchemes": ["com.googleusercontent.apps.196906565572-u239l185vgso2hjlqc851pql4108h584"]
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.196906565572-u239l185vgso2hjlqc851pql4108h584"
+            ]
           }
         ]
       },
@@ -69,9 +73,10 @@
       "expo-apple-authentication",
       "expo-web-browser",
       [
-        "expo-av",
+        "expo-speech-recognition",
         {
-          "microphonePermission": "Continuo uses the microphone to record voice recaps."
+          "microphonePermission": "Continuo uses the microphone to record voice recaps.",
+          "speechRecognitionPermission": "Continuo uses speech recognition to transcribe your voice notes."
         }
       ]
     ],
