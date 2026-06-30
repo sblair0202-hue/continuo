@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=False)  # Railway env vars always win; .env only fills gaps
 
 from contextlib import asynccontextmanager
 
@@ -20,7 +20,11 @@ from app.api.intelligence_routes import router as intelligence_router
 from app.database import Base, SessionLocal, engine
 from app.services.auth_service import seed_admin
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as _e:
+    import sys
+    print(f"[startup] DB create_all failed: {_e}", file=sys.stderr)
 
 # Inline migration: add OAuth columns if missing (handles existing Railway DB)
 try:
