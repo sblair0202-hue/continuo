@@ -12,17 +12,15 @@ from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/email", tags=["email"])
 
-_OAUTH_CALLBACK_USER = "sarah"  # browser-based OAuth flow has no JWT context
-
 # Simple in-memory cache: account_id → (fetched_at, results)
 _thread_cache: dict[int, tuple[float, list]] = {}
 _CACHE_TTL = 900  # 15 minutes
 
 
 @router.get("/connect")
-def connect():
+def connect(user_id: str = "sarah"):
     """Open in browser to start Gmail OAuth flow."""
-    url = email_service.get_auth_url()
+    url = email_service.get_auth_url(user_id=user_id)
     return RedirectResponse(url)
 
 
@@ -36,7 +34,7 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
         </body></html>
         """)
     try:
-        token_data = email_service.exchange_code(code, state)
+        token_data = email_service.exchange_code(code)
     except Exception as exc:
         return HTMLResponse(f"""
         <html><body style="font-family:sans-serif;padding:40px;text-align:center">
@@ -46,9 +44,16 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
         </body></html>
         """, status_code=400)
 
-    token = db.query(EmailToken).filter(EmailToken.user_id == _OAUTH_CALLBACK_USER).first()
+    # Extract user_id embedded in state (format: "uid:<user_id>:<random>")
+    saved_user_id = "sarah"
+    if state and state.startswith("uid:"):
+        parts = state.split(":", 2)
+        if len(parts) >= 2:
+            saved_user_id = parts[1]
+
+    token = db.query(EmailToken).filter(EmailToken.user_id == saved_user_id).first()
     if not token:
-        token = EmailToken(user_id=_OAUTH_CALLBACK_USER)
+        token = EmailToken(user_id=saved_user_id)
         db.add(token)
 
     token.access_token = token_data["access_token"]

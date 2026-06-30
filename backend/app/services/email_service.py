@@ -16,8 +16,9 @@ _CLIENT_ID     = lambda: os.getenv("GOOGLE_WEB_CLIENT_ID") or os.getenv("GOOGLE_
 _CLIENT_SECRET = lambda: os.getenv("GOOGLE_WEB_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 
-def get_auth_url() -> str:
+def get_auth_url(user_id: str = "sarah") -> str:
     import secrets, urllib.parse
+    state = f"uid:{user_id}:{secrets.token_urlsafe(16)}"
     params = {
         "client_id":     _CLIENT_ID(),
         "redirect_uri":  REDIRECT_URI,
@@ -25,12 +26,12 @@ def get_auth_url() -> str:
         "scope":         " ".join(SCOPES),
         "access_type":   "offline",
         "prompt":        "consent",
-        "state":         secrets.token_urlsafe(24),
+        "state":         state,
     }
     return "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
 
 
-def exchange_code(code: str, state: str | None = None) -> dict:
+def exchange_code(code: str) -> dict:
     import requests as _req
     resp = _req.post("https://oauth2.googleapis.com/token", data={
         "code":          code,

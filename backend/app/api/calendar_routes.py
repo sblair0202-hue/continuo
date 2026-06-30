@@ -9,13 +9,10 @@ from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
-_OAUTH_CALLBACK_USER = "sarah"  # browser-based OAuth flow has no JWT context
-
-
 @router.get("/connect")
-def connect():
+def connect(user_id: str = "sarah"):
     """Open this in a browser to start the Google OAuth flow."""
-    url = calendar_service.get_auth_url()
+    url = calendar_service.get_auth_url(user_id=user_id)
     return RedirectResponse(url)
 
 
@@ -30,7 +27,7 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
         </body></html>
         """)
     try:
-        token_data = calendar_service.exchange_code(code, state)
+        token_data = calendar_service.exchange_code(code)
     except Exception as exc:
         return HTMLResponse(f"""
         <html><body style="font-family:sans-serif;padding:40px;text-align:center">
@@ -40,9 +37,16 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
         </body></html>
         """, status_code=400)
 
-    token = db.query(CalendarToken).filter(CalendarToken.user_id == _OAUTH_CALLBACK_USER).first()
+    # Extract user_id embedded in state (format: "uid:<user_id>:<random>")
+    saved_user_id = "sarah"
+    if state and state.startswith("uid:"):
+        parts = state.split(":", 2)
+        if len(parts) >= 2:
+            saved_user_id = parts[1]
+
+    token = db.query(CalendarToken).filter(CalendarToken.user_id == saved_user_id).first()
     if not token:
-        token = CalendarToken(user_id=_OAUTH_CALLBACK_USER)
+        token = CalendarToken(user_id=saved_user_id)
         db.add(token)
 
     token.access_token = token_data["access_token"]

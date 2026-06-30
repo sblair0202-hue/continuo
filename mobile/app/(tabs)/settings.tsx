@@ -26,12 +26,10 @@ export default function SettingsScreen() {
   const [notionImporting, setNotionImporting] = useState(false);
 
   function refreshStatuses() {
-    fetch(`${API_BASE_URL}/calendar/status`)
-      .then(r => r.json())
+    api.getCalendarStatus()
       .then(d => setCalConnected(d.connected))
       .catch(() => setCalConnected(false));
-    fetch(`${API_BASE_URL}/email/status`)
-      .then(r => r.json())
+    api.getEmailStatus()
       .then(d => setEmailConnected(d.connected))
       .catch(() => setEmailConnected(false));
     api.getNotionStatus()
@@ -116,7 +114,7 @@ export default function SettingsScreen() {
             label="Google Calendar"
             statusLabel={calStatus.label}
             statusColor={calStatus.color}
-            onConnect={() => Linking.openURL(`${API_BASE_URL}/calendar/connect`).catch(() =>
+            onConnect={() => Linking.openURL(`${API_BASE_URL}/calendar/connect?user_id=${encodeURIComponent(user?.user_id ?? '')}`).catch(() =>
               Alert.alert('Error', 'Could not open browser. Try again.')
             )}
           />
@@ -125,7 +123,7 @@ export default function SettingsScreen() {
             label="Gmail"
             statusLabel={emailStatus.label}
             statusColor={emailStatus.color}
-            onConnect={() => Linking.openURL(`${API_BASE_URL}/email/connect`).catch(() =>
+            onConnect={() => Linking.openURL(`${API_BASE_URL}/email/connect?user_id=${encodeURIComponent(user?.user_id ?? '')}`).catch(() =>
               Alert.alert('Error', 'Could not open browser. Try again.')
             )}
           />
