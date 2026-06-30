@@ -17,6 +17,11 @@ def connect(user_id: str = "sarah"):
     url = calendar_service.get_auth_url(user_id=user_id)
     return RedirectResponse(url)
 
+@router.get("/debug-url")
+def debug_auth_url(user_id: str = "sarah"):
+    """Returns the OAuth URL without redirecting — for debugging."""
+    return {"auth_url": calendar_service.get_auth_url(user_id=user_id)}
+
 
 @router.get("/callback")
 def callback(code: str, state: str | None = None, error: str | None = None, db: Session = Depends(get_db)):
