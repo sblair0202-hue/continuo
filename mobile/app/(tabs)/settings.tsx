@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null);
   const [notionConnected, setNotionConnected] = useState<boolean | null>(null);
   const [notionImporting, setNotionImporting] = useState(false);
+  const [emailScanning, setEmailScanning] = useState(false);
 
   function refreshStatuses() {
     api.getCalendarStatus()
@@ -35,6 +36,22 @@ export default function SettingsScreen() {
     api.getNotionStatus()
       .then(d => setNotionConnected(d.connected))
       .catch(() => setNotionConnected(false));
+  }
+
+  async function handleEmailScanAccounts() {
+    setEmailScanning(true);
+    try {
+      const result = await api.emailScanAccounts();
+      Alert.alert(
+        'Gmail Scan Complete',
+        `Found ${result.accounts_found_in_email} accounts in email.\n${result.accounts_updated} accounts updated with contact info.\n${result.contacts_added} new contacts added.`,
+        [{ text: 'OK' }]
+      );
+    } catch (e) {
+      Alert.alert('Scan Failed', e instanceof Error ? e.message : 'Could not scan Gmail. Make sure Gmail is connected.');
+    } finally {
+      setEmailScanning(false);
+    }
   }
 
   async function handleNotionImport() {
@@ -126,6 +143,7 @@ export default function SettingsScreen() {
             onConnect={() => Linking.openURL(`${API_BASE_URL}/email/connect?user_id=${encodeURIComponent(user?.user_id ?? '')}`).catch(() =>
               Alert.alert('Error', 'Could not open browser. Try again.')
             )}
+            scanButton={emailConnected ? { scanning: emailScanning, onScan: handleEmailScanAccounts } : undefined}
           />
           <RowDiv />
           <RowDiv />
@@ -282,27 +300,47 @@ function IntegrationRow({
   statusLabel,
   statusColor,
   onConnect,
+  scanButton,
 }: {
   label: string;
   statusLabel: string;
   statusColor: string;
   onConnect?: () => void;
+  scanButton?: { scanning: boolean; onScan: () => void };
 }) {
   return (
-    <TouchableOpacity
-      style={s.row}
-      onPress={onConnect}
-      activeOpacity={onConnect ? 0.7 : 1}
-      disabled={!onConnect}
-    >
-      <Text style={s.rowLabel}>{label}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Text style={[s.rowValue, { color: statusColor }]}>{statusLabel}</Text>
-        {onConnect && statusLabel !== 'Connected' && statusLabel !== 'Coming soon' && (
-          <Text style={s.chev}>›</Text>
-        )}
-      </View>
-    </TouchableOpacity>
+    <View>
+      <TouchableOpacity
+        style={s.row}
+        onPress={onConnect}
+        activeOpacity={onConnect ? 0.7 : 1}
+        disabled={!onConnect}
+      >
+        <Text style={s.rowLabel}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[s.rowValue, { color: statusColor }]}>{statusLabel}</Text>
+          {onConnect && statusLabel !== 'Connected' && statusLabel !== 'Coming soon' && (
+            <Text style={s.chev}>›</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+      {scanButton && (
+        <View style={s.scanRow}>
+          <Text style={s.scanLabel}>Scan for accounts, contacts, and referral info</Text>
+          <TouchableOpacity
+            style={[s.notionImportBtn, scanButton.scanning && { opacity: 0.6 }]}
+            onPress={scanButton.onScan}
+            disabled={scanButton.scanning}
+            activeOpacity={0.7}
+          >
+            {scanButton.scanning
+              ? <ActivityIndicator size="small" color={Colors.sky} />
+              : <Text style={s.notionImportText}>Scan</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -353,6 +391,20 @@ const s = StyleSheet.create({
   deleteBtn:   { paddingVertical: 10, alignItems: 'center' },
   deleteText:  { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.red },
 
+  scanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  scanLabel: {
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 12,
+    color: C.ink3,
+    flex: 1,
+  },
   notionImportBtn: {
     paddingHorizontal: 12,
     paddingVertical: 5,

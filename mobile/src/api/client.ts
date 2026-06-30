@@ -134,6 +134,11 @@ export const api = {
   getDailyBrief: () => request<DailyBrief>('/daily-brief'),
   getEmailStatus: () => request<EmailStatus>('/email/status'),
   extractEmailSignals: () => request<EmailExtractionResult>('/email/extract-signals', { method: 'POST' }),
+  emailScanAccounts: () =>
+    request<{ accounts_updated: number; contacts_added: number; accounts_found_in_email: number }>(
+      '/email/scan-accounts',
+      { method: 'POST', timeoutMs: 60000 }
+    ),
   getNotionStatus: () => request<NotionStatus>('/notion/status'),
   notionSync: () => request<NotionSyncResult>('/notion/sync', { method: 'POST' }),
   notionImport: (databaseId?: string) =>

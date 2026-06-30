@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.domain import Account, CalendarToken, Contact, Signal
 from app.services import calendar_service
-from app.services.auth_service import get_current_user
+from typing import Optional
+
+from app.services.auth_service import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
@@ -65,15 +67,18 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
 
 
 @router.get("/status")
-def status(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
-    # Migrate legacy token saved under hardcoded "sarah"
-    if not token and user_id != "sarah":
-        legacy = db.query(CalendarToken).filter(CalendarToken.user_id == "sarah").first()
-        if legacy:
-            legacy.user_id = user_id
-            db.commit()
-            token = legacy
+def status(user_id: Optional[str] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    if user_id:
+        token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
+        if not token and user_id != "sarah":
+            legacy = db.query(CalendarToken).filter(CalendarToken.user_id == "sarah").first()
+            if legacy:
+                legacy.user_id = user_id
+                db.commit()
+                token = legacy
+    else:
+        # No auth header — single-user fallback (Build #10 compat)
+        token = db.query(CalendarToken).filter(CalendarToken.user_id == "sarah").first()
     return {"connected": token is not None}
 
 

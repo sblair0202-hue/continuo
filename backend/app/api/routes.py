@@ -35,6 +35,22 @@ def get_or_create_account(
     return account
 
 
+@router.get("/debug/db")
+def debug_db(db: Session = Depends(get_db)):
+    """No-auth diagnostic endpoint. Visit in browser to confirm database type and data counts."""
+    from app.database import DATABASE_URL
+    from app.models.domain import User, CalendarToken, EmailToken
+    db_type = "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
+    return {
+        "db_type": db_type,
+        "db_url_prefix": DATABASE_URL[:40] + "...",
+        "accounts": db.query(Account).count(),
+        "users": db.query(User).count(),
+        "calendar_tokens": db.query(CalendarToken).count(),
+        "email_tokens": db.query(EmailToken).count(),
+    }
+
+
 @router.get("/voice-journal/recent")
 def list_recent_voice_journals(db: Session = Depends(get_db)):
     """Debug endpoint: returns the 10 most recent voice journal entries."""

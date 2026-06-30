@@ -127,6 +127,73 @@ def fetch_recent_emails(token_row, hours: int = 48, query_override: str | None =
     return messages
 
 
+def extract_account_data_from_emails(emails: list[dict]) -> list[dict]:
+    """Use Claude to extract structured account contact data from emails.
+    Returns list of dicts with: name, phone, fax, website, contacts[], referral_instructions, etc.
+    """
+    if not emails:
+        return []
+
+    email_blocks = []
+    for e in emails[:20]:
+        block = f"FROM: {e['from']}\nSUBJECT: {e['subject']}\nSNIPPET: {e['snippet']}"
+        if e["body"]:
+            block += f"\nBODY: {e['body'][:800]}"
+        email_blocks.append(block)
+
+    emails_text = "\n\n---\n\n".join(email_blocks)
+
+    prompt = f"""You are helping a medical device sales rep extract account information from their emails.
+
+Analyze these emails and extract any healthcare organization (hospital, clinic, rehab center, health system) contact details mentioned.
+
+Emails:
+{emails_text}
+
+Extract all healthcare accounts you find. For each, return:
+{{
+  "name": "organization name",
+  "phone": "phone number or null",
+  "fax": "fax number or null",
+  "website": "website or null",
+  "referral_email": "referral email address or null",
+  "referral_instructions": "how to refer patients there, or null",
+  "scheduling_instructions": "how to schedule, or null",
+  "contacts": [
+    {{
+      "name": "contact name",
+      "role": "their role/title",
+      "email": "email or null",
+      "phone": "direct phone or null"
+    }}
+  ]
+}}
+
+Rules:
+- Only extract real healthcare organizations, not personal email senders
+- Include direct contacts (therapists, coordinators, physicians, admins) found in these emails
+- If a field is not mentioned, use null
+- Phone/fax should be formatted like (317) 555-1234 or +1-317-555-1234
+- Return a JSON array. Return [] if no healthcare accounts found.
+- Return only valid JSON, no explanation."""
+
+    client = anthropic.Anthropic()
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = message.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    text = text.strip().rstrip("```").strip()
+
+    return json.loads(text) if text else []
+
+
 def extract_signals_from_emails(emails: list[dict], accounts: list) -> list[dict]:
     if not emails:
         return []

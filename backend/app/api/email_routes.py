@@ -7,8 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.domain import Account, Contact, EmailToken, Signal
+from app.services.email_service import extract_account_data_from_emails
 from app.services import email_service
-from app.services.auth_service import get_current_user
+from typing import Optional
+
+from app.services.auth_service import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/email", tags=["email"])
 
@@ -72,15 +75,18 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
 
 
 @router.get("/status")
-def status(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    token = db.query(EmailToken).filter(EmailToken.user_id == user_id).first()
-    # Migrate legacy token saved under hardcoded "sarah"
-    if not token and user_id != "sarah":
-        legacy = db.query(EmailToken).filter(EmailToken.user_id == "sarah").first()
-        if legacy:
-            legacy.user_id = user_id
-            db.commit()
-            token = legacy
+def status(user_id: Optional[str] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    if user_id:
+        token = db.query(EmailToken).filter(EmailToken.user_id == user_id).first()
+        if not token and user_id != "sarah":
+            legacy = db.query(EmailToken).filter(EmailToken.user_id == "sarah").first()
+            if legacy:
+                legacy.user_id = user_id
+                db.commit()
+                token = legacy
+    else:
+        # No auth header — single-user fallback (Build #10 compat)
+        token = db.query(EmailToken).filter(EmailToken.user_id == "sarah").first()
     return {"connected": token is not None}
 
 
@@ -196,3 +202,89 @@ def extract_signals(user_id: str = Depends(get_current_user), db: Session = Depe
     db.commit()
 
     return {"extracted": len(saved), "signals": saved}
+
+
+@router.post("/scan-accounts")
+def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Scan Gmail for account contact data (fax, phone, referral instructions, contacts) and merge into Accounts."""
+    token = db.query(EmailToken).filter(EmailToken.user_id == user_id).first()
+    if not token:
+        raise HTTPException(status_code=401, detail="Gmail not connected. Open Settings → Integrations to connect Gmail.")
+
+    try:
+        emails = email_service.fetch_recent_emails(token, hours=4320)  # 180 days
+        db.add(token)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gmail fetch error: {e}")
+
+    if not emails:
+        return {"accounts_updated": 0, "contacts_added": 0, "message": "No emails found."}
+
+    try:
+        extracted = extract_account_data_from_emails(emails)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Account extraction failed: {e}")
+
+    from sqlalchemy import func as _func
+    existing_accounts = {a.name.lower(): a for a in db.query(Account).all()}
+
+    _MERGE_FIELDS = ("phone", "fax", "website", "referral_email", "referral_instructions", "scheduling_instructions")
+    accounts_updated = 0
+    contacts_added = 0
+
+    for data in extracted:
+        if not data.get("name"):
+            continue
+
+        key = data["name"].lower()
+        account = existing_accounts.get(key)
+
+        if not account:
+            account = Account(name=data["name"], status="prospect", momentum="unknown")
+            db.add(account)
+            db.flush()
+            existing_accounts[key] = account
+
+        changed = False
+        for field in _MERGE_FIELDS:
+            val = data.get(field)
+            if val and not getattr(account, field, None):
+                setattr(account, field, val)
+                changed = True
+
+        if changed:
+            accounts_updated += 1
+
+        # Merge contacts
+        for c_data in data.get("contacts", []):
+            if not c_data.get("name"):
+                continue
+            existing = db.query(Contact).filter(
+                Contact.account_id == account.id,
+                _func.lower(Contact.name) == c_data["name"].lower(),
+            ).first()
+            if not existing:
+                contact = Contact(
+                    account_id=account.id,
+                    name=c_data["name"],
+                    role=c_data.get("role"),
+                    email=c_data.get("email"),
+                    phone=c_data.get("phone"),
+                )
+                db.add(contact)
+                contacts_added += 1
+            else:
+                if c_data.get("email") and not existing.email:
+                    existing.email = c_data["email"]
+                if c_data.get("phone") and not existing.phone:
+                    existing.phone = c_data["phone"]
+                if c_data.get("role") and not existing.role:
+                    existing.role = c_data["role"]
+
+    db.commit()
+    return {
+        "accounts_updated": accounts_updated,
+        "contacts_added": contacts_added,
+        "accounts_found_in_email": len(extracted),
+    }

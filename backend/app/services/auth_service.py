@@ -50,6 +50,13 @@ def get_current_user(authorization: str = Header(default="")) -> str:
     return payload["sub"]
 
 
+def get_optional_user(authorization: str = Header(default="")) -> Optional[str]:
+    if not authorization.startswith("Bearer "):
+        return None
+    payload = decode_token(authorization[7:])
+    return payload["sub"] if payload else None
+
+
 def verify_google_token(id_token: str) -> dict:
     """Verify a Google ID token via tokeninfo endpoint. Returns payload dict."""
     resp = httpx.get(
