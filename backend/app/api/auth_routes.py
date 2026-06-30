@@ -26,6 +26,17 @@ _GOOGLE_CLIENT_SECRET = lambda: _os.getenv("GOOGLE_WEB_CLIENT_SECRET") or _os.ge
 _GOOGLE_AUTH_SCOPES = "openid email profile"
 
 
+@router.get("/debug-oauth")
+def debug_oauth():
+    """No-auth diagnostic — shows runtime OAuth config for Google Sign-In."""
+    import os
+    return {
+        "GOOGLE_AUTH_REDIRECT_URI": _GOOGLE_AUTH_REDIRECT_URI,
+        "GOOGLE_CLIENT_ID_set": bool(_GOOGLE_CLIENT_ID()),
+        "GOOGLE_CLIENT_SECRET_set": bool(_GOOGLE_CLIENT_SECRET()),
+        "live_GOOGLE_AUTH_REDIRECT_URI": os.environ.get("GOOGLE_AUTH_REDIRECT_URI", "NOT_SET"),
+    }
+
 @router.get("/google-connect")
 def google_connect():
     """Browser redirect to start Google OAuth sign-in."""
