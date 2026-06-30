@@ -110,7 +110,7 @@ export const api = {
       { method: 'POST' }
     ),
   getReviewQueue: () =>
-    request<Array<{ id: number; transcript: string; ai_summary: string | null; source: string; created_at: string }>>(
+    request<Array<{ id: number; ai_summary: string | null; preview: string | null; source: string; created_at: string }>>(
       '/voice-journal/queue'
     ),
   getCalendarStatus: () => request<{ connected: boolean }>('/calendar/status'),

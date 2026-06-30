@@ -54,8 +54,8 @@ def get_review_queue(db: Session = Depends(get_db)):
     return [
         {
             "id": e.id,
-            "transcript": e.transcript[:200],
             "ai_summary": e.ai_summary,
+            "preview": e.ai_extraction_json,  # stored extraction JSON for reopening review
             "source": e.source,
             "created_at": str(e.created_at),
         }
@@ -79,6 +79,7 @@ def extract_from_image(payload: dict):
 
 @router.post("/voice-journal", response_model=VoiceJournalResponse)
 def create_voice_journal(payload: VoiceJournalCreate, db: Session = Depends(get_db)):
+    import json as _json
     try:
         extraction = extract_field_intelligence(payload.transcript)
     except Exception as exc:
@@ -87,6 +88,7 @@ def create_voice_journal(payload: VoiceJournalCreate, db: Session = Depends(get_
         user_id=payload.user_id,
         transcript=payload.transcript,
         ai_summary=extraction.summary,
+        ai_extraction_json=_json.dumps(extraction.model_dump()),
     )
     db.add(entry)
     db.commit()

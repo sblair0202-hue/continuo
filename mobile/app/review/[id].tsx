@@ -56,10 +56,6 @@ export default function ReviewScreen() {
       tasks: e.tasks.map(() => true),
     };
   });
-  const [deferred, setDeferred] = useState<boolean[]>(() => {
-    const e: ExtractionResult = JSON.parse(preview ?? '{}');
-    return e.signals.map(() => false);
-  });
   const [saving, setSaving] = useState(false);
   const [savingLater, setSavingLater] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -109,10 +105,6 @@ export default function ReviewScreen() {
     });
   }
 
-  function toggleDefer(i: number) {
-    setDeferred(prev => { const next = [...prev]; next[i] = !next[i]; return next; });
-  }
-
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
@@ -121,9 +113,7 @@ export default function ReviewScreen() {
       accounts: draft.accounts.filter((_, i) => review.accounts[i]),
       contacts: draft.contacts.filter((_, i) => review.contacts[i]),
       signals: draft.signals.flatMap((sig, i) =>
-        review.signals[i]
-          ? [{ ...sig, status: deferred[i] ? 'new' : 'accepted' }]
-          : []
+        review.signals[i] ? [{ ...sig, status: 'accepted' }] : []
       ),
       tasks: draft.tasks.filter((_, i) => review.tasks[i]),
     };
@@ -195,11 +185,10 @@ export default function ReviewScreen() {
           );
         })}
 
-        <SectionHeader title="Signals" prominent />
-        <Text style={styles.signalHint}>Swipe to remove · Tap to edit · Tap "Defer" to review later</Text>
+        <SectionHeader title="Notes" prominent />
+        <Text style={styles.signalHint}>Swipe to remove · Tap to edit</Text>
         {draft.signals.map((signal, i) => {
           const tc = signalTypeColors(signal.signal_type);
-          const isDeferred = deferred[i];
           return (
             <SwipeableRow
               key={i}
@@ -220,14 +209,6 @@ export default function ReviewScreen() {
                     {IMPACT_LABEL[signal.impact_level] ?? signal.impact_level.toUpperCase()}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={[styles.deferBtn, isDeferred && styles.deferBtnActive]}
-                  onPress={() => toggleDefer(i)}
-                >
-                  <Text style={[styles.deferBtnText, isDeferred && styles.deferBtnTextActive]}>
-                    {isDeferred ? '⏰ Deferred' : 'Defer'}
-                  </Text>
-                </TouchableOpacity>
               </View>
               <Text style={[styles.itemTitle, !review.signals[i] && styles.rejected]}>
                 {signal.title}
@@ -239,7 +220,7 @@ export default function ReviewScreen() {
           );
         })}
 
-        <SectionHeader title="Contacts" />
+        <SectionHeader title="People" />
         {draft.contacts.map((contact, i) => (
           <SwipeableRow
             key={i}
@@ -313,7 +294,7 @@ export default function ReviewScreen() {
             {saving ? (
               <ActivityIndicator color={Colors.surface} />
             ) : (
-              <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save Memory'}</Text>
+              <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save'}</Text>
             )}
           </TouchableOpacity>
         </View>

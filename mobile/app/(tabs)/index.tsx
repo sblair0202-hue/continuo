@@ -119,7 +119,7 @@ export default function TodayScreen() {
   const [schedOpen, setSchedOpen]       = useState<Record<string, boolean>>({});
   const [prep, setPrep]                 = useState<Record<string, MeetingPrep>>({});
   const [prepLoading, setPrepLoading]   = useState<Record<string, boolean>>({});
-  const [queueCount, setQueueCount]     = useState(0);
+  const [queue, setQueue]               = useState<Array<{ id: number; ai_summary: string | null; preview: string | null; source: string; created_at: string }>>([]);
 
   const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
@@ -142,7 +142,7 @@ export default function TodayScreen() {
         if (connected) api.getTodayEvents().then(setMeetings).catch(() => {});
       }
       if (briefR.status === 'fulfilled' && briefR.value) setBrief(briefR.value);
-      if (queueR.status === 'fulfilled') setQueueCount((queueR.value as unknown[]).length);
+      if (queueR.status === 'fulfilled') setQueue(queueR.value as typeof queue);
     }).finally(() => { setLoading(false); setRefreshing(false); setLastUpdated(new Date()); });
   }
 
@@ -280,18 +280,31 @@ export default function TodayScreen() {
           <Text style={s.focusEyebrow}>Today's focus</Text>
           <Text style={s.focusDeck}>{focusStatement}</Text>
         </View>
-        {queueCount > 0 && (
-          <TouchableOpacity
-            style={s.queueBanner}
-            onPress={() => router.push('/review-queue' as never)}
-            activeOpacity={0.8}
-          >
-            <Text style={s.queueBannerIcon}>🎙</Text>
-            <Text style={s.queueBannerText}>
-              {queueCount === 1 ? '1 recap saved for later' : `${queueCount} recaps saved for later`}
-            </Text>
-            <Text style={s.queueBannerArrow}>→</Text>
-          </TouchableOpacity>
+        {queue.length > 0 && (
+          <>
+            <View style={s.continueSection}>
+              <Text style={s.eyebrowInline}>Continue where you left off</Text>
+              {queue.slice(0, 3).map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={s.queueItem}
+                  activeOpacity={0.72}
+                  onPress={() => {
+                    if (item.preview) {
+                      router.push({ pathname: '/review/[id]', params: { id: item.id, preview: item.preview } });
+                    }
+                  }}
+                >
+                  <Text style={s.queueItemDot}>·</Text>
+                  <Text style={s.queueItemText} numberOfLines={1}>
+                    {item.ai_summary ?? 'Untitled capture'}
+                  </Text>
+                  <Text style={s.queueItemArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={s.divSection} />
+          </>
         )}
 
         <View style={s.divSection} />
@@ -556,23 +569,20 @@ const s = StyleSheet.create({
   focusEyebrow:{ marginTop: 22, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, color: C.eyebrow, letterSpacing: 2.8, textTransform: 'uppercase' },
   focusDeck:   { marginTop: 11, fontSize: 22, fontFamily: 'Newsreader_400Regular_Italic', color: C.focusInk, lineHeight: 31.5, letterSpacing: -0.1 },
 
-  // Review Queue banner
-  queueBanner: {
+  // Continue where you left off
+  continueSection: { paddingHorizontal: 26, paddingTop: 22, paddingBottom: 6 },
+  eyebrowInline: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.eyebrow, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 14 },
+  queueItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginHorizontal: 26,
-    marginTop: 14,
-    backgroundColor: Colors.clayTint,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: Colors.clay,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.rowDiv,
   },
-  queueBannerIcon:  { fontSize: 16 },
-  queueBannerText:  { flex: 1, fontFamily: 'HankenGrotesk_500Medium', fontSize: 13, color: Colors.ink },
-  queueBannerArrow: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.clay },
+  queueItemDot:   { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 18, color: C.orange, lineHeight: 22 },
+  queueItemText:  { flex: 1, fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.ink },
+  queueItemArrow: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 18, color: C.ink3 },
 
   divSection:  { height: 1, backgroundColor: C.sectionDiv, marginHorizontal: 26 },
   section:     { paddingHorizontal: 26, paddingTop: 26, paddingBottom: 2 },
