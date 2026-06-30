@@ -10,26 +10,22 @@ export default function TabLayout() {
   const router = useRouter();
   const [showQuickActions, setShowQuickActions] = useState(false);
 
-  function openCapture() {
-    router.push('/new-recap');
-  }
-
   return (
     <>
       <Tabs
         screenOptions={{
-          headerStyle: { backgroundColor: Colors.surface },
+          headerStyle: { backgroundColor: Colors.paper },
           headerTintColor: Colors.sky,
           headerTitleStyle: { fontFamily: 'HankenGrotesk_600SemiBold', color: Colors.ink },
           tabBarActiveTintColor: Colors.sky,
           tabBarInactiveTintColor: Colors.graphite,
           tabBarStyle: {
-            backgroundColor: Colors.surface,
+            backgroundColor: Colors.paper,
             borderTopColor: Colors.mist,
-            paddingBottom: 4,
-            height: 64,
+            borderTopWidth: 1,
+            height: 72,
           },
-          tabBarLabelStyle: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, marginBottom: 2 },
+          tabBarLabelStyle: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 10, marginBottom: 4 },
         }}
       >
         <Tabs.Screen
@@ -37,7 +33,7 @@ export default function TabLayout() {
           options={{
             title: 'Today',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="today-outline" size={size} color={color} />
+              <Ionicons name="today-outline" size={22} color={color} />
             ),
           }}
         />
@@ -46,7 +42,7 @@ export default function TabLayout() {
           options={{
             title: 'Accounts',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="business-outline" size={size} color={color} />
+              <Ionicons name="business-outline" size={22} color={color} />
             ),
           }}
         />
@@ -59,7 +55,7 @@ export default function TabLayout() {
             tabBarLabel: () => null,
             tabBarButton: () => (
               <OrbButton
-                onPress={openCapture}
+                onPress={() => router.push({ pathname: '/voice-capture', params: { autoStart: 'false' } })}
                 onLongPress={() => setShowQuickActions(true)}
               />
             ),
@@ -71,7 +67,7 @@ export default function TabLayout() {
           options={{
             title: 'Search',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="search-outline" size={size} color={color} />
+              <Ionicons name="search-outline" size={22} color={color} />
             ),
           }}
         />
@@ -80,7 +76,7 @@ export default function TabLayout() {
           options={{
             title: 'Settings',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person-circle-outline" size={size} color={color} />
+              <Ionicons name="settings-outline" size={22} color={color} />
             ),
           }}
         />
@@ -89,9 +85,18 @@ export default function TabLayout() {
       <QuickActionsSheet
         visible={showQuickActions}
         onClose={() => setShowQuickActions(false)}
-        onSelectVoiceNote={() => { setShowQuickActions(false); router.push('/voice-capture'); }}
-        onSelectQuickNote={() => { setShowQuickActions(false); openCapture(); }}
-        onSelectPhoto={() => { setShowQuickActions(false); openCapture(); }}
+        onSelectVoiceNote={() => {
+          setShowQuickActions(false);
+          router.push({ pathname: '/voice-capture', params: { autoStart: 'true' } });
+        }}
+        onSelectTypeNote={() => {
+          setShowQuickActions(false);
+          router.push({ pathname: '/voice-capture', params: { mode: 'type' } });
+        }}
+        onSelectPhoto={() => {
+          setShowQuickActions(false);
+          router.push({ pathname: '/voice-capture', params: { mode: 'photo' } });
+        }}
       />
     </>
   );

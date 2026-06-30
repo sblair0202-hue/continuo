@@ -6,6 +6,7 @@ import {
   useFonts as useHanken,
 } from '@expo-google-fonts/hanken-grotesk';
 import {
+  Newsreader_400Regular,
   Newsreader_400Regular_Italic,
 } from '@expo-google-fonts/newsreader';
 import {
@@ -63,7 +64,8 @@ function RootNavigator() {
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="biometric-unlock" options={{ headerShown: false }} />
       <Stack.Screen name="new-recap" options={{ title: 'New Recap', presentation: 'modal' }} />
-      <Stack.Screen name="review/[id]" options={{ title: 'Review Memory' }} />
+      <Stack.Screen name="voice-capture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="review/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="account/[id]" options={{ title: 'Account', headerBackTitle: 'Back' }} />
       <Stack.Screen name="meeting/[id]" options={{ title: 'Meeting Prep' }} />
       <Stack.Screen name="referral-guide" options={{ title: 'Referral Guide', presentation: 'modal' }} />
@@ -78,6 +80,7 @@ export default function RootLayout() {
     HankenGrotesk_500Medium,
     HankenGrotesk_600SemiBold,
     HankenGrotesk_700Bold,
+    Newsreader_400Regular,
     Newsreader_400Regular_Italic,
     SpaceMono_400Regular,
     SpaceMono_700Bold,

@@ -1,12 +1,11 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
+  Easing,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,799 +13,803 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '../../src/api/client';
-import { Colors, Radius, impactColor, signalTypeColors, sp } from '../../src/constants/colors';
-import type { Account, ExtractionResult } from '../../src/types';
+import { useOrb } from '../../src/context/OrbContext';
+import { Colors } from '../../src/constants/colors';
+import type { ExtractionResult, ExtractedSignal } from '../../src/types';
 
-const IMPACT_LABEL: Record<string, string> = {
-  high: 'HIGH IMPACT',
-  medium: 'MEDIUM IMPACT',
-  low: 'LOW IMPACT',
-};
+// ─── Helper: derive display sections from ExtractionResult ────────────────────
 
-const SIGNAL_TYPES = ['opportunity', 'risk', 'win', 'milestone', 'relationship', 'momentum', 'task', 'continuity'];
-const IMPACT_LEVELS = ['high', 'medium', 'low'];
-const PRIORITIES = ['high', 'medium', 'low'];
+function deriveAccounts(e: ExtractionResult): string[] {
+  const set = new Set<string>();
+  e.accounts.forEach(a => a.name && set.add(a.name));
+  e.contacts.forEach(c => c.account_name && set.add(c.account_name));
+  (e.signals ?? []).forEach(s => s.account_name && set.add(s.account_name));
+  (e.activities ?? []).forEach((a: any) => a.account_name && set.add(a.account_name));
+  (e.tasks ?? []).forEach(t => t.account_name && set.add(t.account_name));
+  return Array.from(set).filter(Boolean);
+}
 
-type Section = 'accounts' | 'contacts' | 'signals' | 'tasks';
+function noteSignals(signals: ExtractedSignal[]) {
+  return signals.filter(s => !['opportunity', 'win', 'milestone'].includes(s.signal_type));
+}
+function opportunitySignals(signals: ExtractedSignal[]) {
+  return signals.filter(s => s.signal_type === 'opportunity' || s.signal_type === 'win');
+}
+function milestoneSignals(signals: ExtractedSignal[]) {
+  return signals.filter(s => s.signal_type === 'milestone');
+}
 
-type ReviewState = {
-  accounts: boolean[];
-  contacts: boolean[];
-  signals: boolean[];
-  tasks: boolean[];
-};
+// ─── Inline-editable field ────────────────────────────────────────────────────
 
-type EditTarget = { section: Section; index: number } | null;
+function EditableText({
+  value,
+  onChange,
+  style,
+  multiline,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  style?: object;
+  multiline?: boolean;
+  placeholder?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={[
+        s.editableField,
+        style,
+        focused && s.editableFieldFocused,
+        multiline && s.editableFieldMulti,
+      ]}
+      multiline={multiline}
+      placeholder={placeholder}
+      placeholderTextColor={Colors.stone}
+      textAlignVertical={multiline ? 'top' : 'center'}
+    />
+  );
+}
+
+// ─── Row with × remove ────────────────────────────────────────────────────────
+
+function RemovableRow({
+  kept,
+  onRemove,
+  children,
+}: {
+  kept: boolean;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  if (!kept) return null;
+  return (
+    <View style={s.removableRow}>
+      <View style={s.removableContent}>{children}</View>
+      <TouchableOpacity onPress={onRemove} style={s.removeBtn} activeOpacity={0.6} hitSlop={8}>
+        <Text style={s.removeBtnText}>×</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Section card ─────────────────────────────────────────────────────────────
+
+function SectionCard({
+  eyebrow,
+  eyebrowColor,
+  eyebrowTrailing,
+  borderColor,
+  children,
+}: {
+  eyebrow: string;
+  eyebrowColor?: string;
+  eyebrowTrailing?: React.ReactNode;
+  borderColor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={[s.card, borderColor ? { borderColor } : null]}>
+      <View style={s.cardEyebrowRow}>
+        <Text style={[s.cardEyebrow, eyebrowColor ? { color: eyebrowColor } : null]}>
+          {eyebrow}
+        </Text>
+        {eyebrowTrailing}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+// ─── Capture Orb (save overlay) ───────────────────────────────────────────────
+
+function SaveOrb({ state }: { state: 'saving' | 'saved' | 'later' }) {
+  const spin = useRef(new Animated.Value(0)).current;
+  const checkOpacity = useRef(new Animated.Value(0)).current;
+  const ringOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (state === 'saving') {
+      Animated.loop(
+        Animated.timing(spin, { toValue: 1, duration: 1700, easing: Easing.linear, useNativeDriver: true })
+      ).start();
+    } else if (state === 'saved') {
+      spin.stopAnimation();
+      Animated.parallel([
+        Animated.timing(ringOpacity, { toValue: 0.25, duration: 400, useNativeDriver: true }),
+        Animated.timing(checkOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [state]);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const ringColor = state === 'saved' ? Colors.sage : Colors.sky;
+
+  return (
+    <View style={so.orb}>
+      <LinearGradient
+        colors={['#ffffff', '#F4F2EE', '#E5E0DA']}
+        start={{ x: 0.36, y: 0.22 }}
+        end={{ x: 0.64, y: 1.0 }}
+        style={[StyleSheet.absoluteFill, { borderRadius: 65 }]}
+      />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: ringOpacity }]}>
+        <Svg width={130} height={130} viewBox="0 0 130 130" fill="none">
+          <Circle cx="65" cy="65" r="38" stroke={ringColor} strokeWidth="9" />
+        </Svg>
+      </Animated.View>
+      {/* Spinning orbit dot (saving) */}
+      {state === 'saving' && (
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ rotate }] }]} pointerEvents="none">
+          <View style={so.orbitDot} />
+        </Animated.View>
+      )}
+      {/* Checkmark (saved) */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: checkOpacity, alignItems: 'center', justifyContent: 'center' }]}>
+        <Svg width={40} height={32} viewBox="0 0 40 32" fill="none">
+          <Polyline points="4,16 16,28 36,4" stroke={Colors.sage} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+type SavePhase = null | 'saving' | 'saved' | 'savingLater' | 'later';
 
 export default function ReviewScreen() {
   const router = useRouter();
   const { id, preview } = useLocalSearchParams<{ id: string; preview: string }>();
+  const insets = useSafeAreaInsets();
+  const { flashComplete } = useOrb();
 
-  const [draft, setDraft] = useState<ExtractionResult>(() => JSON.parse(preview ?? '{}'));
-  const [review, setReview] = useState<ReviewState>(() => {
-    const e: ExtractionResult = JSON.parse(preview ?? '{}');
-    return {
-      accounts: e.accounts.map(() => true),
-      contacts: e.contacts.map(() => true),
-      signals: e.signals.map(() => true),
-      tasks: e.tasks.map(() => true),
-    };
+  const parsed: ExtractionResult = preview ? JSON.parse(preview) : {} as ExtractionResult;
+
+  // Editable state
+  const [summary, setSummary] = useState(parsed.summary ?? '');
+  const [accounts, setAccounts] = useState<{ name: string; kept: boolean }[]>(() =>
+    deriveAccounts(parsed).map(name => ({ name, kept: true }))
+  );
+  const [people, setPeople] = useState<{ name: string; role: string; account_name: string; kept: boolean }[]>(() =>
+    (parsed.contacts ?? []).map(c => ({ name: c.name, role: c.role ?? '', account_name: c.account_name ?? '', kept: true }))
+  );
+  const [tasks, setTasks] = useState<{ title: string; account_name: string; kept: boolean }[]>(() =>
+    (parsed.tasks ?? []).map(t => ({ title: t.title, account_name: t.account_name ?? '', kept: true }))
+  );
+  const [activities, setActivities] = useState<{ type: string; account_name: string; kept: boolean }[]>(() =>
+    (parsed.activities ?? []).map((a: any) => ({ type: a.type ?? a.activity_type ?? '', account_name: a.account_name ?? '', kept: true }))
+  );
+  const [notes, setNotes] = useState(() => {
+    const sigs = noteSignals(parsed.signals ?? []);
+    return sigs.map(s => s.title).join('\n');
   });
-  const [saving, setSaving] = useState(false);
-  const [savingLater, setSavingLater] = useState(false);
+  const [opportunities, setOpportunities] = useState<{ title: string; account_name: string; kept: boolean }[]>(() => [
+    ...opportunitySignals(parsed.signals ?? []).map(s => ({ title: s.title, account_name: s.account_name ?? '', kept: true })),
+    ...(parsed.opportunities ?? []).map(o => ({ title: o, account_name: '', kept: true })),
+  ]);
+  const [milestones, setMilestones] = useState<{ title: string; kept: boolean }[]>(() =>
+    milestoneSignals(parsed.signals ?? []).map(s => ({ title: s.title, kept: true }))
+  );
+
+  const [savePhase, setSavePhase] = useState<SavePhase>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [tasksExpanded, setTasksExpanded] = useState(false);
-  const [editTarget, setEditTarget] = useState<EditTarget>(null);
-  const [existingAccounts, setExistingAccounts] = useState<Account[]>([]);
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    api.getAccounts().then(setExistingAccounts).catch(() => {});
-  }, []);
-
-  function findSimilarAccount(name: string): Account | null {
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const target = norm(name);
-    if (!target) return null;
-    for (const a of existingAccounts) {
-      const existing = norm(a.name);
-      if (existing === target) return null; // exact match — get_or_create handles it fine
-      if (existing.includes(target) || target.includes(existing)) return a;
-    }
-    return null;
-  }
-
-  function updateField(section: Section, index: number, fields: object) {
-    setDraft(prev => ({
-      ...prev,
-      [section]: (prev[section] as object[]).map((item, i) =>
-        i === index ? { ...item, ...fields } : item
-      ),
-    }));
-  }
-
-  function reject(section: Section, index: number) {
-    setReview(prev => {
-      const updated = [...prev[section]];
-      updated[index] = false;
-      return { ...prev, [section]: updated };
-    });
-  }
-
-  function restore(section: Section, index: number) {
-    setReview(prev => {
-      const updated = [...prev[section]];
-      updated[index] = true;
-      return { ...prev, [section]: updated };
-    });
+  function showOverlay() {
+    Animated.timing(overlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }
 
   async function handleSave() {
-    setSaving(true);
+    setSavePhase('saving');
+    showOverlay();
     setSaveError(null);
-    const filtered: ExtractionResult = {
-      ...draft,
-      accounts: draft.accounts.filter((_, i) => review.accounts[i]),
-      contacts: draft.contacts.filter((_, i) => review.contacts[i]),
-      signals: draft.signals.flatMap((sig, i) =>
-        review.signals[i] ? [{ ...sig, status: 'accepted' }] : []
-      ),
-      tasks: draft.tasks.filter((_, i) => review.tasks[i]),
+
+    // Build the approval payload from kept items
+    const filteredSignals = [
+      ...opportunities.filter(o => o.kept).map(o => ({
+        signal_type: 'opportunity' as const,
+        title: o.title,
+        account_name: o.account_name || null,
+        contact_names: [],
+        confidence_score: 0.8,
+        impact_level: 'medium' as const,
+        urgency: 'low' as const,
+        summary: null,
+        evidence_text: null,
+        suggested_action: null,
+        status: 'accepted',
+      })),
+      ...milestones.filter(m => m.kept).map(m => ({
+        signal_type: 'milestone' as const,
+        title: m.title,
+        account_name: null,
+        contact_names: [],
+        confidence_score: 0.8,
+        impact_level: 'medium' as const,
+        urgency: 'low' as const,
+        summary: null,
+        evidence_text: null,
+        suggested_action: null,
+        status: 'accepted',
+      })),
+    ];
+
+    const payload: ExtractionResult = {
+      ...parsed,
+      summary,
+      accounts: accounts.filter(a => a.kept).map(a => ({ ...({} as any), name: a.name })),
+      contacts: people.filter(p => p.kept).map(p => ({ ...({} as any), name: p.name, role: p.role, account_name: p.account_name })),
+      tasks: tasks.filter(t => t.kept).map(t => ({ ...({} as any), title: t.title, account_name: t.account_name })),
+      activities: activities.filter(a => a.kept).map(a => ({ type: a.type, account_name: a.account_name })),
+      signals: filteredSignals,
     };
+
     try {
-      await api.approveJournal(Number(id), filtered);
-      setSaved(true);
-      setTimeout(() => router.replace('/'), 800);
+      await api.approveJournal(Number(id), payload);
+      setSavePhase('saved');
+      flashComplete();
+      setTimeout(() => router.replace('/'), 1800);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Save failed.');
-    } finally {
-      setSaving(false);
+      setSavePhase(null);
+      Animated.timing(overlayOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start();
     }
   }
 
   async function handleSaveLater() {
-    setSavingLater(true);
+    setSavePhase('savingLater');
+    showOverlay();
     setSaveError(null);
     try {
       await api.saveForLater(Number(id));
-      router.replace('/');
+      setSavePhase('later');
+      setTimeout(() => router.replace('/'), 1700);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Could not save for later.');
-      setSavingLater(false);
+      setSavePhase(null);
+      Animated.timing(overlayOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start();
     }
   }
 
+  const isSaving = savePhase === 'saving' || savePhase === 'savingLater';
+  const keptOpps = opportunities.filter(o => o.kept);
+  const keptMiles = milestones.filter(m => m.kept);
+
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-
-        <SectionHeader title="Accounts" />
-        {draft.accounts.map((account, i) => {
-          const similar = findSimilarAccount(account.name);
-          return (
-            <SwipeableRow
-              key={i}
-              accepted={review.accounts[i]}
-              onReject={() => reject('accounts', i)}
-              onRestore={() => restore('accounts', i)}
-              onEdit={() => setEditTarget({ section: 'accounts', index: i })}
-              prominent={false}
-            >
-              <Text style={[styles.itemTitle, !review.accounts[i] && styles.rejected]}>
-                {account.name}
-              </Text>
-              {account.city && (
-                <Text style={styles.itemSub}>
-                  {account.city}{account.state ? `, ${account.state}` : ''}
-                </Text>
-              )}
-              {similar && review.accounts[i] && (
-                <View style={styles.mergeRow}>
-                  <Text style={styles.mergeText}>⚠️ Similar account: "{similar.name}"</Text>
-                  <TouchableOpacity
-                    onPress={() => updateField('accounts', i, { name: similar.name })}
-                    style={styles.mergeBtn}
-                  >
-                    <Text style={styles.mergeBtnText}>Merge</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {/* keep as-is */}}
-                    style={[styles.mergeBtn, styles.mergeBtnAlt]}
-                  >
-                    <Text style={[styles.mergeBtnText, { color: Colors.graphite }]}>Keep new</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </SwipeableRow>
-          );
-        })}
-
-        <SectionHeader title="Notes" prominent />
-        <Text style={styles.signalHint}>Swipe to remove · Tap to edit</Text>
-        {draft.signals.map((signal, i) => {
-          const tc = signalTypeColors(signal.signal_type);
-          return (
-            <SwipeableRow
-              key={i}
-              accepted={review.signals[i]}
-              onReject={() => reject('signals', i)}
-              onRestore={() => restore('signals', i)}
-              onEdit={() => setEditTarget({ section: 'signals', index: i })}
-              prominent
-            >
-              <View style={styles.signalHeader}>
-                <View style={[styles.badge, { backgroundColor: tc.bg }]}>
-                  <Text style={[styles.badgeText, { color: tc.text }]}>
-                    {signal.signal_type.replace('_', ' ')}
-                  </Text>
-                </View>
-                <View style={[styles.impactBadge, { borderColor: impactColor(signal.impact_level) }]}>
-                  <Text style={[styles.impactBadgeText, { color: impactColor(signal.impact_level) }]}>
-                    {IMPACT_LABEL[signal.impact_level] ?? signal.impact_level.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.itemTitle, !review.signals[i] && styles.rejected]}>
-                {signal.title}
-              </Text>
-              {signal.suggested_action && (
-                <Text style={styles.itemSub}>{signal.suggested_action}</Text>
-              )}
-            </SwipeableRow>
-          );
-        })}
-
-        <SectionHeader title="People" />
-        {draft.contacts.map((contact, i) => (
-          <SwipeableRow
-            key={i}
-            accepted={review.contacts[i]}
-            onReject={() => reject('contacts', i)}
-            onRestore={() => restore('contacts', i)}
-            onEdit={() => setEditTarget({ section: 'contacts', index: i })}
-            prominent={false}
-          >
-            <Text style={[styles.itemTitle, !review.contacts[i] && styles.rejected]}>
-              {contact.name}
-            </Text>
-            {contact.role && <Text style={styles.itemSub}>{contact.role}</Text>}
-            {contact.account_name && (
-              <Text style={styles.itemSub}>{contact.account_name}</Text>
-            )}
-          </SwipeableRow>
-        ))}
-
-        <TouchableOpacity
-          style={styles.tasksCollapse}
-          onPress={() => setTasksExpanded((v) => !v)}
+    <View style={s.screen}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
+          contentContainerStyle={[s.scroll, { paddingBottom: 120 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.tasksCollapseText}>
-            Generated Tasks ({draft.tasks.length}) {tasksExpanded ? '▲' : '▼'}
-          </Text>
-        </TouchableOpacity>
-        {tasksExpanded && draft.tasks.map((task, i) => (
-          <SwipeableRow
-            key={i}
-            accepted={review.tasks[i]}
-            onReject={() => reject('tasks', i)}
-            onRestore={() => restore('tasks', i)}
-            onEdit={() => setEditTarget({ section: 'tasks', index: i })}
-            prominent={false}
-          >
-            <View style={styles.taskRow}>
-              <View style={[styles.priorityBadge, { backgroundColor: Colors.task }]}>
-                <Text style={[styles.badgeText, { color: Colors.taskText }]}>{task.priority}</Text>
-              </View>
+          {/* Header */}
+          <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+            <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+              <Text style={s.backBtnText}>‹</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <View style={s.sourceChip}>
+              <Text style={s.sourceChipText}>🎙 Voice note</Text>
             </View>
-            <Text style={[styles.itemTitle, !review.tasks[i] && styles.rejected]}>
-              {task.title}
-            </Text>
-            {task.account_name && <Text style={styles.itemSub}>{task.account_name}</Text>}
-          </SwipeableRow>
-        ))}
+          </View>
+          <View style={s.titleBlock}>
+            <Text style={s.titleText}>Review</Text>
+            <Text style={s.titleSub}>Review and edit before saving.</Text>
+          </View>
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          {/* Summary */}
+          <SectionCard eyebrow="SUMMARY">
+            <EditableText
+              value={summary}
+              onChange={setSummary}
+              multiline
+              placeholder="AI summary will appear here…"
+              style={s.summaryText}
+            />
+          </SectionCard>
 
-      <View style={styles.footer}>
-        {saveError && <Text style={styles.errorText}>{saveError}</Text>}
-        <View style={styles.footerRow}>
-          <TouchableOpacity
-            style={[styles.saveLaterButton, savingLater && styles.saveButtonDisabled]}
-            onPress={handleSaveLater}
-            disabled={saving || savingLater}
-          >
-            {savingLater ? (
-              <ActivityIndicator color={Colors.graphite} size="small" />
-            ) : (
-              <Text style={styles.saveLaterText}>Save for Later</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.saveButton, styles.saveButtonFlex, saving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={saving || savingLater}
-          >
-            {saving ? (
-              <ActivityIndicator color={Colors.surface} />
-            ) : (
-              <Text style={styles.saveText}>{saved ? 'Saved!' : 'Save'}</Text>
-            )}
-          </TouchableOpacity>
+          {/* Accounts */}
+          {accounts.some(a => a.kept) && (
+            <SectionCard eyebrow="ACCOUNTS">
+              {accounts.map((a, i) => (
+                <RemovableRow key={i} kept={a.kept} onRemove={() => setAccounts(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
+                  <View style={s.accountRow}>
+                    <View style={s.accountTile}>
+                      <Text style={s.accountTileIcon}>🏥</Text>
+                    </View>
+                    <EditableText
+                      value={a.name}
+                      onChange={v => setAccounts(prev => prev.map((x, j) => j === i ? { ...x, name: v } : x))}
+                      style={s.accountName}
+                    />
+                  </View>
+                </RemovableRow>
+              ))}
+            </SectionCard>
+          )}
+
+          {/* People */}
+          {people.some(p => p.kept) && (
+            <SectionCard eyebrow="PEOPLE">
+              {people.map((p, i) => (
+                <RemovableRow key={i} kept={p.kept} onRemove={() => setPeople(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
+                  <View style={s.personRow}>
+                    <View style={s.avatar}>
+                      <Text style={s.avatarText}>{p.name ? p.name[0].toUpperCase() : '?'}</Text>
+                    </View>
+                    <View style={s.personInfo}>
+                      <View style={s.personNameRow}>
+                        <EditableText
+                          value={p.name}
+                          onChange={v => setPeople(prev => prev.map((x, j) => j === i ? { ...x, name: v } : x))}
+                          style={s.personName}
+                        />
+                        <View style={s.newPill}><Text style={s.newPillText}>NEW</Text></View>
+                      </View>
+                      <EditableText
+                        value={p.role}
+                        onChange={v => setPeople(prev => prev.map((x, j) => j === i ? { ...x, role: v } : x))}
+                        placeholder="Role / Title"
+                        style={s.personRole}
+                      />
+                    </View>
+                  </View>
+                </RemovableRow>
+              ))}
+            </SectionCard>
+          )}
+
+          {/* Tasks */}
+          {tasks.some(t => t.kept) && (
+            <SectionCard eyebrow="TASKS">
+              {tasks.map((t, i) => (
+                <RemovableRow key={i} kept={t.kept} onRemove={() => setTasks(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
+                  <View style={s.taskRow}>
+                    <View style={s.taskDot} />
+                    <View style={s.taskInfo}>
+                      <EditableText
+                        value={t.title}
+                        onChange={v => setTasks(prev => prev.map((x, j) => j === i ? { ...x, title: v } : x))}
+                        style={s.taskTitle}
+                      />
+                      {t.account_name ? (
+                        <Text style={s.taskMeta}>{t.account_name}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </RemovableRow>
+              ))}
+            </SectionCard>
+          )}
+
+          {/* Activities */}
+          {activities.some(a => a.kept) && (
+            <SectionCard eyebrow="ACTIVITIES">
+              {activities.map((a, i) => (
+                <RemovableRow key={i} kept={a.kept} onRemove={() => setActivities(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
+                  <View style={s.activityRow}>
+                    <View style={s.activityTile}>
+                      <Text style={s.activityTileIcon}>📅</Text>
+                    </View>
+                    <View style={s.activityInfo}>
+                      <EditableText
+                        value={a.type}
+                        onChange={v => setActivities(prev => prev.map((x, j) => j === i ? { ...x, type: v } : x))}
+                        style={s.activityType}
+                      />
+                      {a.account_name ? <Text style={s.activityMeta}>{a.account_name}</Text> : null}
+                    </View>
+                  </View>
+                </RemovableRow>
+              ))}
+            </SectionCard>
+          )}
+
+          {/* Notes */}
+          <SectionCard eyebrow="NOTES">
+            <EditableText
+              value={notes}
+              onChange={setNotes}
+              multiline
+              placeholder="Additional notes from this capture…"
+              style={s.notesText}
+            />
+          </SectionCard>
+
+          {/* Opportunities (conditional) */}
+          {keptOpps.length > 0 && (
+            <SectionCard
+              eyebrow="OPPORTUNITIES"
+              eyebrowColor={Colors.sky}
+              borderColor={Colors.skyTint}
+              eyebrowTrailing={
+                <View style={s.detectedPill}>
+                  <Text style={s.detectedPillText}>DETECTED</Text>
+                </View>
+              }
+            >
+              {opportunities.map((o, i) => (
+                <RemovableRow key={i} kept={o.kept} onRemove={() => setOpportunities(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
+                  <View style={s.oppRow}>
+                    <View style={s.oppDot} />
+                    <View style={s.oppInfo}>
+                      <EditableText
+                        value={o.title}
+                        onChange={v => setOpportunities(prev => prev.map((x, j) => j === i ? { ...x, title: v } : x))}
+                        style={s.oppTitle}
+                      />
+                      {o.account_name ? <Text style={s.oppMeta}>{o.account_name}</Text> : null}
+                    </View>
+                  </View>
+                </RemovableRow>
+              ))}
+            </SectionCard>
+          )}
+
+          {/* Milestones (conditional) */}
+          {keptMiles.length > 0 && (
+            <SectionCard eyebrow="MILESTONES">
+              {milestones.map((m, i) => (
+                <RemovableRow key={i} kept={m.kept} onRemove={() => setMilestones(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
+                  <View style={s.taskRow}>
+                    <View style={[s.taskDot, { backgroundColor: Colors.clay }]} />
+                    <EditableText
+                      value={m.title}
+                      onChange={v => setMilestones(prev => prev.map((x, j) => j === i ? { ...x, title: v } : x))}
+                      style={s.taskTitle}
+                    />
+                  </View>
+                </RemovableRow>
+              ))}
+            </SectionCard>
+          )}
+        </ScrollView>
+
+        {/* Pinned action bar */}
+        <View style={[s.actionBar, { paddingBottom: insets.bottom + 14 }]}>
+          {saveError ? <Text style={s.saveError}>{saveError}</Text> : null}
+          <View style={s.actionBtns}>
+            <TouchableOpacity
+              style={[s.saveLaterBtn, isSaving && s.btnDisabled]}
+              onPress={handleSaveLater}
+              disabled={isSaving}
+              activeOpacity={0.75}
+            >
+              <Text style={s.saveLaterText}>Save for Later</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.saveBtn, isSaving && s.btnDisabled]}
+              onPress={handleSave}
+              disabled={isSaving}
+              activeOpacity={0.85}
+            >
+              <Text style={s.saveBtnText}>Save</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
-      {editTarget && (
-        <EditSheet
-          section={editTarget.section}
-          item={(draft[editTarget.section] as object[])[editTarget.index]}
-          onSave={(fields) => {
-            updateField(editTarget.section, editTarget.index, fields);
-            setEditTarget(null);
-          }}
-          onClose={() => setEditTarget(null)}
-        />
+      {/* Save confirmation overlay */}
+      {savePhase !== null && (
+        <Animated.View style={[s.overlay, { opacity: overlayOpacity }]} pointerEvents="none">
+          <SaveOrb state={savePhase === 'saving' ? 'saving' : savePhase === 'saved' ? 'saved' : 'saving'} />
+          <Text style={so.overlayTitle}>
+            {savePhase === 'saving'     ? 'Saving…'
+           : savePhase === 'saved'      ? 'Saved to Continuo'
+           : savePhase === 'savingLater'? 'Saving draft…'
+           :                              'Saved for later'}
+          </Text>
+          <Text style={so.overlaySub}>
+            {savePhase === 'saving'     ? 'Committing what you approved.'
+           : savePhase === 'saved'      ? 'Your field intel is organized.'
+           : savePhase === 'savingLater'? 'Saving to your Review Queue.'
+           :                              'Waiting in your Review Queue. Nothing committed yet.'}
+          </Text>
+        </Animated.View>
       )}
     </View>
   );
 }
 
-// ─── Edit Sheet ───────────────────────────────────────────────────────────────
-
-function EditSheet({
-  section,
-  item,
-  onSave,
-  onClose,
-}: {
-  section: Section;
-  item: Record<string, unknown>;
-  onSave: (fields: Record<string, unknown>) => void;
-  onClose: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const slideY = useRef(new Animated.Value(400)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const [local, setLocal] = useState<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(item)) {
-      if (typeof v === 'string') out[k] = v;
-    }
-    return out;
-  });
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(slideY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 260 }),
-      Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  function set(key: string, val: string) {
-    setLocal(prev => ({ ...prev, [key]: val }));
-  }
-
-  function handleSave() {
-    onSave(local);
-  }
-
-  const sectionLabel: Record<Section, string> = {
-    accounts: 'Account',
-    contacts: 'Contact',
-    signals: 'Signal',
-    tasks: 'Task',
-  };
-
-  return (
-    <Modal transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-        <Animated.View style={[StyleSheet.absoluteFill, es.backdrop, { opacity: backdropOpacity }]} />
-      </Pressable>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={es.kav}
-        pointerEvents="box-none"
-      >
-        <Animated.View style={[es.sheet, { paddingBottom: insets.bottom + sp.md, transform: [{ translateY: slideY }] }]}>
-          <View style={es.handle} />
-          <Text style={es.heading}>Edit {sectionLabel[section]}</Text>
-
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            {section === 'accounts' && (
-              <>
-                <Field label="Name" value={local.name ?? ''} onChangeText={v => set('name', v)} />
-                <Field label="City" value={local.city ?? ''} onChangeText={v => set('city', v)} />
-                <Field label="State" value={local.state ?? ''} onChangeText={v => set('state', v)} maxLength={2} autoCapitalize="characters" />
-                <Field label="Status" value={local.status ?? ''} onChangeText={v => set('status', v)} placeholder="Active, Warm, At Risk…" />
-                <Field label="Next Action" value={local.next_action ?? ''} onChangeText={v => set('next_action', v)} multiline />
-              </>
-            )}
-
-            {section === 'contacts' && (
-              <>
-                <Field label="Name" value={local.name ?? ''} onChangeText={v => set('name', v)} />
-                <Field label="Role / Title" value={local.role ?? ''} onChangeText={v => set('role', v)} />
-                <Field label="Account" value={local.account_name ?? ''} onChangeText={v => set('account_name', v)} />
-                <Field label="Relationship Note" value={local.relationship_note ?? ''} onChangeText={v => set('relationship_note', v)} multiline />
-              </>
-            )}
-
-            {section === 'signals' && (
-              <>
-                <Field label="Title" value={local.title ?? ''} onChangeText={v => set('title', v)} />
-                <Field label="Suggested Action" value={local.suggested_action ?? ''} onChangeText={v => set('suggested_action', v)} multiline />
-                <Field label="Summary" value={local.summary ?? ''} onChangeText={v => set('summary', v)} multiline />
-                <ChipField
-                  label="Type"
-                  options={SIGNAL_TYPES}
-                  value={local.signal_type ?? ''}
-                  onSelect={v => set('signal_type', v)}
-                />
-                <ChipField
-                  label="Impact"
-                  options={IMPACT_LEVELS}
-                  value={local.impact_level ?? ''}
-                  onSelect={v => set('impact_level', v)}
-                />
-              </>
-            )}
-
-            {section === 'tasks' && (
-              <>
-                <Field label="Title" value={local.title ?? ''} onChangeText={v => set('title', v)} />
-                <Field label="Description" value={local.description ?? ''} onChangeText={v => set('description', v)} multiline />
-                <Field label="Account" value={local.account_name ?? ''} onChangeText={v => set('account_name', v)} />
-                <ChipField
-                  label="Priority"
-                  options={PRIORITIES}
-                  value={local.priority ?? ''}
-                  onSelect={v => set('priority', v)}
-                />
-              </>
-            )}
-
-            <View style={{ height: sp.md }} />
-          </ScrollView>
-
-          <View style={es.btnRow}>
-            <TouchableOpacity style={es.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={es.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={es.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-              <Text style={es.saveText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChangeText,
-  multiline,
-  placeholder,
-  maxLength,
-  autoCapitalize,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  multiline?: boolean;
-  placeholder?: string;
-  maxLength?: number;
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
-}) {
-  return (
-    <View style={es.field}>
-      <Text style={es.fieldLabel}>{label}</Text>
-      <TextInput
-        style={[es.fieldInput, multiline && es.fieldInputMulti]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder ?? ''}
-        placeholderTextColor={Colors.stone}
-        multiline={multiline}
-        maxLength={maxLength}
-        autoCapitalize={autoCapitalize ?? 'sentences'}
-      />
-    </View>
-  );
-}
-
-function ChipField({
-  label,
-  options,
-  value,
-  onSelect,
-}: {
-  label: string;
-  options: string[];
-  value: string;
-  onSelect: (v: string) => void;
-}) {
-  return (
-    <View style={es.field}>
-      <Text style={es.fieldLabel}>{label}</Text>
-      <View style={es.chips}>
-        {options.map(opt => (
-          <TouchableOpacity
-            key={opt}
-            style={[es.chip, value === opt && es.chipActive]}
-            onPress={() => onSelect(opt)}
-            activeOpacity={0.7}
-          >
-            <Text style={[es.chipText, value === opt && es.chipTextActive]}>
-              {opt.replace('_', ' ')}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-// ─── Swipeable Row ────────────────────────────────────────────────────────────
-
-function SectionHeader({ title, prominent }: { title: string; prominent?: boolean }) {
-  return (
-    <Text style={[styles.sectionHeader, prominent && styles.sectionHeaderProminent]}>
-      {title}
-    </Text>
-  );
-}
-
-function SwipeableRow({
-  children,
-  accepted,
-  onReject,
-  onRestore,
-  onEdit,
-  prominent,
-}: {
-  children: React.ReactNode;
-  accepted: boolean;
-  onReject: () => void;
-  onRestore: () => void;
-  onEdit: () => void;
-  prominent: boolean;
-}) {
-  const swipeableRef = useRef<Swipeable>(null);
-
-  function renderRightAction(progress: Animated.AnimatedInterpolation<number>) {
-    const translateX = progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [80, 0],
-    });
-    return (
-      <Animated.View style={[styles.deleteAction, { transform: [{ translateX }] }]}>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => {
-            swipeableRef.current?.close();
-            onReject();
-          }}
-        >
-          <Text style={styles.deleteText}>Remove</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
-  if (!accepted) {
-    return (
-      <TouchableOpacity
-        style={[styles.row, prominent && styles.rowProminent, styles.rowRejected]}
-        onPress={onRestore}
-      >
-        <View style={styles.rowContent}>{children}</View>
-        <Text style={styles.restoreText}>Undo</Text>
-      </TouchableOpacity>
-    );
-  }
-
-  return (
-    <Swipeable
-      ref={swipeableRef}
-      renderRightActions={renderRightAction}
-      rightThreshold={40}
-      overshootRight={false}
-    >
-      <TouchableOpacity
-        style={[styles.row, prominent && styles.rowProminent]}
-        onPress={onEdit}
-        activeOpacity={0.85}
-      >
-        <View style={styles.rowContent}>{children}</View>
-        <Text style={styles.editIcon}>✏️</Text>
-      </TouchableOpacity>
-    </Swipeable>
-  );
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { padding: 16 },
-  sectionHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginTop: 20,
-    marginBottom: 6,
-  },
-  sectionHeaderProminent: { color: Colors.primary, fontSize: 12 },
-  row: {
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.paper },
+  scroll: { paddingHorizontal: 22 },
+
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    paddingBottom: 4,
+    paddingHorizontal: 0,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.linen,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnText: { fontSize: 22, color: Colors.ink, lineHeight: 28, marginTop: -2 },
+  sourceChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: Colors.linen,
+  },
+  sourceChipText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12, color: Colors.graphite },
+
+  titleBlock: { paddingTop: 12, paddingBottom: 20 },
+  titleText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 30, lineHeight: 34, letterSpacing: -0.6, color: Colors.inkDark },
+  titleSub: { fontFamily: 'Newsreader_400Regular_Italic', fontSize: 16, color: Colors.graphite, marginTop: 4 },
+
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.mist,
+    padding: 16,
+    paddingTop: 12,
+    marginBottom: 14,
+    shadowColor: '#3C3228',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
     elevation: 1,
   },
-  rowProminent: {
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
-  },
-  rowRejected: { opacity: 0.4 },
-  rowContent: { flex: 1 },
-  editIcon: { fontSize: 14, opacity: 0.4, marginLeft: sp.sm },
-  itemTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  itemSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 3 },
-  rejected: { textDecorationLine: 'line-through' },
-  signalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' },
-  badge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 11, fontWeight: '600' },
-  impactBadge: { borderRadius: 4, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
-  impactBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  tasksCollapse: {
-    marginTop: 20,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tasksCollapseText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  taskRow: { flexDirection: 'row', marginBottom: 4 },
-  priorityBadge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
-  deleteAction: { marginBottom: 8, justifyContent: 'center' },
-  deleteButton: {
-    backgroundColor: Colors.high,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    borderRadius: 10,
-    height: '100%',
-  },
-  deleteText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  restoreText: { fontSize: 12, color: Colors.primary, fontWeight: '600', marginLeft: 8 },
-  footer: {
-    padding: 16,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  errorText: { color: Colors.high, fontSize: 13, marginBottom: 8, textAlign: 'center' },
-  footerRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  saveLaterButton: {
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.paper,
-  },
-  saveLaterText: { color: Colors.graphite, fontSize: 14, fontWeight: '600' },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  saveButtonFlex: { flex: 1 },
-  saveButtonDisabled: { opacity: 0.6 },
-  saveText: { color: Colors.surface, fontSize: 16, fontWeight: '700' },
-  bottomSpacer: { height: 20 },
-  signalHint: { fontSize: 12, color: Colors.textSecondary, marginBottom: 8, marginTop: -4 },
-  mergeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-  mergeText: { fontSize: 11, color: Colors.clay, flex: 1, flexShrink: 1 },
-  mergeBtn: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6, backgroundColor: Colors.sage, minWidth: 48, alignItems: 'center' },
-  mergeBtnAlt: { backgroundColor: Colors.linen },
-  mergeBtnText: { fontSize: 11, fontWeight: '700', color: Colors.paper },
-  deferBtn: {
-    marginLeft: 'auto',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  deferBtnActive: { backgroundColor: '#FFF3E0', borderColor: '#E67E22' },
-  deferBtnText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
-  deferBtnTextActive: { color: '#E67E22' },
-});
-
-const es = StyleSheet.create({
-  backdrop: { backgroundColor: 'rgba(42,35,28,0.45)' },
-  kav: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: sp.sm,
-    paddingHorizontal: sp.md,
-    maxHeight: '90%',
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.mist,
-    alignSelf: 'center',
-    marginBottom: sp.md,
-  },
-  heading: {
+  cardEyebrowRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  cardEyebrow: {
     fontFamily: 'HankenGrotesk_600SemiBold',
-    fontSize: 17,
-    color: Colors.ink,
-    textAlign: 'center',
-    marginBottom: sp.md,
-  },
-  field: { marginBottom: sp.md },
-  fieldLabel: {
-    fontFamily: 'HankenGrotesk_600SemiBold',
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.graphite,
-    letterSpacing: 1.1,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: sp.sm,
   },
-  fieldInput: {
-    backgroundColor: Colors.paper,
-    borderRadius: Radius.sm,
-    paddingHorizontal: sp.md,
-    paddingVertical: 12,
+
+  editableField: {
     fontFamily: 'HankenGrotesk_400Regular',
     fontSize: 15,
     color: Colors.ink,
-    borderWidth: 1,
-    borderColor: Colors.mist,
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+    minHeight: 24,
+    borderRadius: 6,
   },
-  fieldInputMulti: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: sp.sm,
-  },
-  chip: {
-    paddingHorizontal: sp.md,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.mist,
-    backgroundColor: Colors.paper,
-  },
-  chipActive: {
+  editableFieldFocused: {
     backgroundColor: Colors.skyTint,
-    borderColor: Colors.sky,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
-  chipText: {
-    fontFamily: 'HankenGrotesk_500Medium',
-    fontSize: 13,
-    color: Colors.graphite,
+  editableFieldMulti: { minHeight: 88 },
+
+  summaryText: {
+    fontFamily: 'Newsreader_400Regular',
+    fontSize: 16.5,
+    lineHeight: 26,
+    color: Colors.inkDark,
+    minHeight: 88,
   },
-  chipTextActive: {
-    color: Colors.sky,
+  notesText: {
+    fontFamily: 'Newsreader_400Regular',
+    fontSize: 15.5,
+    lineHeight: 26,
+    color: Colors.ink,
+    minHeight: 70,
   },
-  btnRow: {
+
+  removableRow: {
     flexDirection: 'row',
-    gap: sp.sm,
-    paddingTop: sp.md,
+    alignItems: 'flex-start',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.linen,
   },
-  cancelBtn: {
+  removableContent: { flex: 1 },
+  removeBtn: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    marginTop: 2,
+    opacity: 0.5,
+  },
+  removeBtnText: { fontSize: 20, color: Colors.graphite, lineHeight: 22 },
+
+  // Accounts
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  accountTile: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: Colors.skyTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountTileIcon: { fontSize: 14 },
+  accountName: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, flex: 1 },
+
+  // People
+  personRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.skyTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: Colors.sky },
+  personInfo: { flex: 1, gap: 2 },
+  personNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  personName: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, flex: 1 },
+  personRole: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12.5, color: Colors.graphite },
+  newPill: {
+    backgroundColor: Colors.skyTint,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  newPillText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 10, color: Colors.sky },
+
+  // Tasks
+  taskRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2 },
+  taskDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: Colors.sage, marginTop: 6 },
+  taskInfo: { flex: 1 },
+  taskTitle: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15 },
+  taskMeta: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12, color: Colors.graphite, marginTop: 2 },
+
+  // Activities
+  activityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2 },
+  activityTile: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: Colors.clayTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityTileIcon: { fontSize: 14 },
+  activityInfo: { flex: 1 },
+  activityType: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15 },
+  activityMeta: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12, color: Colors.graphite, marginTop: 2 },
+
+  // Opportunities
+  detectedPill: {
+    backgroundColor: Colors.skyTint,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  detectedPillText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 9, color: Colors.sky, letterSpacing: 0.8 },
+  oppRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2 },
+  oppDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: Colors.sky, marginTop: 6 },
+  oppInfo: { flex: 1 },
+  oppTitle: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15 },
+  oppMeta: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12, color: Colors.graphite, marginTop: 2 },
+
+  // Action bar
+  actionBar: {
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    backgroundColor: 'rgba(249,248,244,0.92)',
+    borderTopWidth: 1,
+    borderTopColor: Colors.mist,
+  },
+  actionBtns: { flexDirection: 'row', gap: 12 },
+  saveError: {
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 13,
+    color: Colors.rose,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  saveLaterBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: Radius.sm,
+    paddingVertical: 15,
+    borderRadius: 9999,
     borderWidth: 1,
-    borderColor: Colors.mist,
+    borderColor: Colors.stone,
     alignItems: 'center',
   },
-  cancelText: {
-    fontFamily: 'HankenGrotesk_500Medium',
-    fontSize: 15,
-    color: Colors.graphite,
-  },
+  saveLaterText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14.5, color: Colors.inkDark },
   saveBtn: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.inkDark,
+    flex: 1,
+    paddingVertical: 15,
+    borderRadius: 9999,
+    backgroundColor: Colors.sky,
     alignItems: 'center',
+    shadowColor: Colors.sky,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    elevation: 6,
   },
-  saveText: {
-    fontFamily: 'HankenGrotesk_600SemiBold',
-    fontSize: 15,
-    color: Colors.reversed,
+  saveBtnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.surface },
+  btnDisabled: { opacity: 0.6 },
+
+  // Save overlay
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    zIndex: 99,
+  },
+});
+
+const so = StyleSheet.create({
+  orb: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3C3228',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.16,
+    shadowRadius: 36,
+    elevation: 10,
+  },
+  orbitDot: {
+    position: 'absolute',
+    top: 6,
+    left: '50%',
+    marginLeft: -4.5,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: Colors.sky,
+  },
+  overlayTitle: {
+    fontFamily: 'Newsreader_400Regular',
+    fontSize: 26,
+    color: Colors.inkDark,
+    textAlign: 'center',
+  },
+  overlaySub: {
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.graphite,
+    textAlign: 'center',
+    maxWidth: 240,
   },
 });
