@@ -67,6 +67,13 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
 @router.get("/status")
 def status(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
     token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
+    # Migrate legacy token saved under hardcoded "sarah"
+    if not token and user_id != "sarah":
+        legacy = db.query(CalendarToken).filter(CalendarToken.user_id == "sarah").first()
+        if legacy:
+            legacy.user_id = user_id
+            db.commit()
+            token = legacy
     return {"connected": token is not None}
 
 

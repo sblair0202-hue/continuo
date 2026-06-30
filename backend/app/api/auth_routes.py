@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -22,31 +21,26 @@ _GOOGLE_AUTH_REDIRECT_URI = _os.getenv(
     "GOOGLE_AUTH_REDIRECT_URI",
     "http://localhost:8000/auth/google-callback",
 )
-# Web app credentials (NOT the Desktop/iOS credential — must be "Web application" type in Google Cloud)
-_GOOGLE_AUTH_CONFIG = {
-    "web": {
-        "client_id": _os.getenv("GOOGLE_WEB_CLIENT_ID") or _os.getenv("GOOGLE_CLIENT_ID", ""),
-        "client_secret": _os.getenv("GOOGLE_WEB_CLIENT_SECRET") or _os.getenv("GOOGLE_CLIENT_SECRET", ""),
-        "redirect_uris": [_GOOGLE_AUTH_REDIRECT_URI],
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-    }
-}
-_GOOGLE_AUTH_SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-]
+_GOOGLE_CLIENT_ID     = lambda: _os.getenv("GOOGLE_WEB_CLIENT_ID") or _os.getenv("GOOGLE_CLIENT_ID", "")
+_GOOGLE_CLIENT_SECRET = lambda: _os.getenv("GOOGLE_WEB_CLIENT_SECRET") or _os.getenv("GOOGLE_CLIENT_SECRET", "")
+_GOOGLE_AUTH_SCOPES = "openid email profile"
 
 
 @router.get("/google-connect")
 def google_connect():
     """Browser redirect to start Google OAuth sign-in."""
-    flow = Flow.from_client_config(
-        _GOOGLE_AUTH_CONFIG, scopes=_GOOGLE_AUTH_SCOPES, redirect_uri=_GOOGLE_AUTH_REDIRECT_URI
-    )
-    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
-    return RedirectResponse(auth_url)
+    import secrets
+    params = {
+        "client_id":     _GOOGLE_CLIENT_ID(),
+        "redirect_uri":  _GOOGLE_AUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope":         _GOOGLE_AUTH_SCOPES,
+        "access_type":   "offline",
+        "prompt":        "consent",
+        "state":         secrets.token_urlsafe(24),
+    }
+    url = "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
+    return RedirectResponse(url)
 
 
 @router.get("/google-callback")
@@ -55,13 +49,22 @@ def google_callback(code: Optional[str] = None, error: Optional[str] = None, db:
     if error or not code:
         return RedirectResponse("continuo://auth/callback?error=cancelled")
     try:
-        flow = Flow.from_client_config(
-            _GOOGLE_AUTH_CONFIG, scopes=_GOOGLE_AUTH_SCOPES, redirect_uri=_GOOGLE_AUTH_REDIRECT_URI
+        import requests as _req
+        token_resp = _req.post("https://oauth2.googleapis.com/token", data={
+            "code":          code,
+            "client_id":     _GOOGLE_CLIENT_ID(),
+            "client_secret": _GOOGLE_CLIENT_SECRET(),
+            "redirect_uri":  _GOOGLE_AUTH_REDIRECT_URI,
+            "grant_type":    "authorization_code",
+        })
+        if not token_resp.ok:
+            raise ValueError(f"Token exchange failed: {token_resp.text}")
+        access_token = token_resp.json()["access_token"]
+        info_resp = _req.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
         )
-        flow.fetch_token(code=code)
-        from googleapiclient.discovery import build as _gbuild
-        service = _gbuild("oauth2", "v2", credentials=flow.credentials)
-        info = service.userinfo().get().execute()
+        info = info_resp.json()
         user = create_or_get_oauth_user(
             db,
             email=info["email"],
