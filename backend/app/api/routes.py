@@ -38,12 +38,15 @@ def get_or_create_account(
 @router.get("/debug/db")
 def debug_db(db: Session = Depends(get_db)):
     """No-auth diagnostic endpoint. Visit in browser to confirm database type and data counts."""
+    import os
     from app.database import DATABASE_URL
     from app.models.domain import User, CalendarToken, EmailToken
     db_type = "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
+    live_env = os.environ.get("DATABASE_URL", "NOT_IN_PROCESS_ENV")
     return {
         "db_type": db_type,
         "db_url_prefix": DATABASE_URL[:40] + "...",
+        "live_env_DATABASE_URL": live_env[:30] + "..." if len(live_env) > 30 else live_env,
         "accounts": db.query(Account).count(),
         "users": db.query(User).count(),
         "calendar_tokens": db.query(CalendarToken).count(),
