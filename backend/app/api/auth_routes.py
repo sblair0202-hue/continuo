@@ -60,7 +60,7 @@ def google_callback(code: Optional[str] = None, error: Optional[str] = None, db:
     if error or not code:
         return RedirectResponse("continuo://auth/callback?error=cancelled")
     try:
-        import requests as _req
+        import sys, requests as _req
         token_resp = _req.post("https://oauth2.googleapis.com/token", data={
             "code":          code,
             "client_id":     _GOOGLE_CLIENT_ID(),
@@ -68,6 +68,7 @@ def google_callback(code: Optional[str] = None, error: Optional[str] = None, db:
             "redirect_uri":  _GOOGLE_AUTH_REDIRECT_URI,
             "grant_type":    "authorization_code",
         })
+        print(f"[google-callback] token exchange status={token_resp.status_code} body={token_resp.text[:300]}", file=sys.stderr)
         if not token_resp.ok:
             raise ValueError(f"Token exchange failed: {token_resp.text}")
         access_token = token_resp.json()["access_token"]
