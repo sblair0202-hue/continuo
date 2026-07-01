@@ -20,6 +20,30 @@ _thread_cache: dict[int, tuple[float, list]] = {}
 _CACHE_TTL = 900  # 15 minutes
 
 
+@router.get("/debug-scan")
+def debug_scan(db: Session = Depends(get_db)):
+    """No-auth diagnostic — shows scan step results for troubleshooting."""
+    import traceback, os
+    result: dict = {}
+    token = db.query(EmailToken).filter(EmailToken.user_id == "sarah").first()
+    if not token:
+        token = db.query(EmailToken).first()
+    result["token_found"] = token is not None
+    result["token_user_id"] = token.user_id if token else None
+    result["GOOGLE_CLIENT_ID_set"] = bool(os.getenv("GOOGLE_CLIENT_ID"))
+    result["ANTHROPIC_API_KEY_set"] = bool(os.getenv("ANTHROPIC_API_KEY"))
+    if not token:
+        return result
+    try:
+        emails = email_service.fetch_recent_emails(token, hours=48)
+        result["emails_fetched"] = len(emails)
+        result["fetch_ok"] = True
+    except Exception as e:
+        result["fetch_ok"] = False
+        result["fetch_error"] = traceback.format_exc()
+    return result
+
+
 @router.get("/connect")
 def connect(user_id: str = "sarah"):
     """Open in browser to start Gmail OAuth flow."""
