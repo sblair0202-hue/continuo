@@ -129,6 +129,9 @@ export default function VoiceCaptureScreen() {
   const breatheAnim = useRef(new Animated.Value(1)).current;
   const breatheLoop = useRef<Animated.CompositeAnimation | null>(null);
   const understandingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs so stopListening always reads the latest values (avoids stale closure bug)
+  const transcriptRef = useRef('');
+  const interimTranscriptRef = useRef('');
 
   // Start gentle breathing animation
   useEffect(() => {
@@ -160,9 +163,13 @@ export default function VoiceCaptureScreen() {
   useSpeechRecognitionEvent('result', (event) => {
     const latest = event.results[0]?.transcript ?? '';
     if (event.isFinal) {
-      setTranscript(prev => prev.trim() ? `${prev.trim()} ${latest}` : latest);
+      const next = transcriptRef.current.trim() ? `${transcriptRef.current.trim()} ${latest}` : latest;
+      transcriptRef.current = next;
+      interimTranscriptRef.current = '';
+      setTranscript(next);
       setInterimTranscript('');
     } else {
+      interimTranscriptRef.current = latest;
       setInterimTranscript(latest);
     }
   });
@@ -193,6 +200,8 @@ export default function VoiceCaptureScreen() {
       setError('Microphone access needed. Allow in Settings.');
       return;
     }
+    transcriptRef.current = '';
+    interimTranscriptRef.current = '';
     setTranscript('');
     setInterimTranscript('');
     setStage('listening');
@@ -200,11 +209,14 @@ export default function VoiceCaptureScreen() {
   }
 
   async function stopListening() {
+    // Combine committed transcript + any pending interim words before stop clears them
+    const combined = [transcriptRef.current.trim(), interimTranscriptRef.current.trim()]
+      .filter(Boolean).join(' ');
     ExpoSpeechRecognitionModule.stop();
+    interimTranscriptRef.current = '';
     setInterimTranscript('');
     setStage('understanding');
-    // Analyze immediately while showing understanding state
-    await analyzeAndNavigate(transcript);
+    await analyzeAndNavigate(combined);
   }
 
   async function analyzeAndNavigate(text: string) {
