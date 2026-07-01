@@ -209,6 +209,12 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
     """Scan Gmail for account contact data (fax, phone, referral instructions, contacts) and merge into Accounts."""
     token = db.query(EmailToken).filter(EmailToken.user_id == user_id).first()
     if not token:
+        legacy = db.query(EmailToken).filter(EmailToken.user_id == "sarah").first()
+        if legacy:
+            legacy.user_id = user_id
+            db.commit()
+            token = legacy
+    if not token:
         raise HTTPException(status_code=401, detail="Gmail not connected. Open Settings → Integrations to connect Gmail.")
 
     try:

@@ -91,7 +91,13 @@ def status(user_id: Optional[str] = Depends(get_optional_user), db: Session = De
 def today_events(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
     token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
     if not token:
-        raise HTTPException(status_code=401, detail="Calendar not connected. Open http://localhost:8000/calendar/connect in your browser.")
+        legacy = db.query(CalendarToken).filter(CalendarToken.user_id == "sarah").first()
+        if legacy:
+            legacy.user_id = user_id
+            db.commit()
+            token = legacy
+    if not token:
+        raise HTTPException(status_code=401, detail="Calendar not connected. Open Settings to connect Google Calendar.")
 
     try:
         events = calendar_service.fetch_today_events(token)
