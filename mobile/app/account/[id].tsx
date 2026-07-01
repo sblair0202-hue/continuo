@@ -69,7 +69,7 @@ const SIGNAL_TYPES: SignalType[] = [
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ContextAction = { icon: string; label: string; onPress: () => void; destructive?: boolean };
+type ContextAction = { label: string; onPress: () => void; destructive?: boolean };
 type ConvertTarget = 'opportunity' | 'task' | 'milestone';
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -478,10 +478,10 @@ export default function AccountScreen() {
                 onDelete={() => handleDeleteSignalConfirm(sig)}
                 onEdit={() => setEditingSignal(sig)}
                 onMenu={() => setContextActions([
-                  { icon: '↪️', label: 'Convert to different type...', onPress: () => { setContextActions(null); setConvertingSignal(sig); } },
-                  { icon: '✏️', label: 'Edit', onPress: () => { setContextActions(null); setEditingSignal(sig); } },
-                  { icon: '✓', label: 'Resolve (dismiss)', onPress: () => { setContextActions(null); dismissSignal(sig); } },
-                  { icon: '🗑', label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteSignalConfirm(sig); } },
+                  { label: 'Convert to...', onPress: () => { setContextActions(null); setConvertingSignal(sig); } },
+                  { label: 'Edit', onPress: () => { setContextActions(null); setEditingSignal(sig); } },
+                  { label: 'Resolve', onPress: () => { setContextActions(null); dismissSignal(sig); } },
+                  { label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteSignalConfirm(sig); } },
                 ])}
               />
             ))}
@@ -511,8 +511,8 @@ export default function AccountScreen() {
               key={opp.id}
               highlighted={highlightedId === opp.id}
               onMenu={() => setContextActions([
-                { icon: '✏️', label: 'Edit', onPress: () => { setContextActions(null); setEditingOpp(opp); } },
-                { icon: '🗑', label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteOpp(opp); } },
+                { label: 'Edit', onPress: () => { setContextActions(null); setEditingOpp(opp); } },
+                { label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteOpp(opp); } },
               ])}
             >
               <View style={s.row}>
@@ -546,8 +546,8 @@ export default function AccountScreen() {
                 highlighted={highlightedId === m.id}
                 isLast={i === localMilestones.length - 1}
                 onMenu={() => setContextActions([
-                  { icon: '✏️', label: 'Edit', onPress: () => { setContextActions(null); setEditingMilestone(m); } },
-                  { icon: '🗑', label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteMilestone(m); } },
+                  { label: 'Edit', onPress: () => { setContextActions(null); setEditingMilestone(m); } },
+                  { label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteMilestone(m); } },
                 ])}
               />
             ))}
@@ -570,9 +570,9 @@ export default function AccountScreen() {
               highlighted={highlightedId === task.id}
               onDone={() => handleCompleteTask(task)}
               onMenu={() => setContextActions([
-                { icon: '✏️', label: 'Edit', onPress: () => { setContextActions(null); setEditingTask(task); } },
-                { icon: '✅', label: 'Mark Done', onPress: () => { setContextActions(null); handleCompleteTask(task); } },
-                { icon: '🗑', label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteTask(task); } },
+                { label: 'Edit', onPress: () => { setContextActions(null); setEditingTask(task); } },
+                { label: 'Mark Done', onPress: () => { setContextActions(null); handleCompleteTask(task); } },
+                { label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteTask(task); } },
               ])}
             />
           ))
@@ -610,8 +610,8 @@ export default function AccountScreen() {
               <EntityCard
                 key={c.id}
                 onMenu={() => setContextActions([
-                  { icon: '✏️', label: 'Edit', onPress: () => { setContextActions(null); setEditingContact(c); } },
-                  { icon: '🗑', label: 'Remove', destructive: true, onPress: () => { setContextActions(null); handleDeleteContact(c); } },
+                  { label: 'Edit', onPress: () => { setContextActions(null); setEditingContact(c); } },
+                  { label: 'Remove', destructive: true, onPress: () => { setContextActions(null); handleDeleteContact(c); } },
                 ])}
               >
                 <View style={s.row}>
@@ -639,10 +639,10 @@ export default function AccountScreen() {
             <Text style={s.chevron}>{expanded.referral ? '▾' : '▸'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setEditingReferral(true)} style={s.addIcon}>
-            <Text style={[s.addIconText, { fontSize: 16 }]}>✏️</Text>
+            <Text style={s.addIconText}>Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push(`/referral-guide?account_id=${accountId}`)} style={[s.addIcon, { marginLeft: 4 }]}>
-            <Text style={[s.addIconText, { fontSize: 15 }]}>⬆️</Text>
+            <Text style={s.addIconText}>Guide</Text>
           </TouchableOpacity>
         </View>
         {expanded.referral && (
@@ -742,9 +742,9 @@ export default function AccountScreen() {
                 key={sig.id}
                 style={s.cardMuted}
                 onMenu={() => setContextActions([
-                  { icon: '↪️', label: 'Convert to...', onPress: () => { setContextActions(null); setConvertingSignal(sig); } },
-                  { icon: '✏️', label: 'Edit', onPress: () => { setContextActions(null); setEditingSignal(sig); } },
-                  { icon: '🗑', label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteSignalConfirm(sig); } },
+                  { label: 'Convert to...', onPress: () => { setContextActions(null); setConvertingSignal(sig); } },
+                  { label: 'Edit', onPress: () => { setContextActions(null); setEditingSignal(sig); } },
+                  { label: 'Delete', destructive: true, onPress: () => { setContextActions(null); handleDeleteSignalConfirm(sig); } },
                 ])}
               >
                 <Text style={[s.cardTitle, { color: Colors.textSecondary }]}>{sig.title}</Text>
@@ -914,7 +914,6 @@ function InboxSignalCard({ signal, onConvert, onDelete, onEdit, onMenu }: {
             activeOpacity={0.85}
           >
             <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
-              <Text style={s.swipeIcon}>↪️</Text>
               <Text style={s.swipeLabel}>Accept</Text>
             </Animated.View>
           </TouchableOpacity>
@@ -929,7 +928,6 @@ function InboxSignalCard({ signal, onConvert, onDelete, onEdit, onMenu }: {
             activeOpacity={0.85}
           >
             <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
-              <Text style={s.swipeIcon}>🗑</Text>
               <Text style={s.swipeLabel}>Delete</Text>
             </Animated.View>
           </TouchableOpacity>
@@ -1070,8 +1068,7 @@ function ContextMenu({ actions, onClose }: { actions: ContextAction[]; onClose: 
               onPress={a.onPress}
               activeOpacity={0.7}
             >
-              <Text style={s.menuItemIcon}>{a.icon}</Text>
-              <Text style={[s.menuItemLabel, a.destructive && { color: '#E74C3C' }]}>{a.label}</Text>
+              <Text style={[s.menuItemLabel, a.destructive && { color: Colors.critical }]}>{a.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -1172,21 +1169,18 @@ function ConvertSignalModal({ signal, accountId, onDone, onAddOpp, onAddMileston
           <View style={s.convertChoices}>
             <Text style={[s.cardSub, { textAlign: 'center', marginBottom: 20 }]}>{signal.title}</Text>
             <TouchableOpacity style={s.convertBtn} onPress={() => setStep('opportunity')} activeOpacity={0.8}>
-              <Text style={s.convertBtnIcon}>💡</Text>
               <View>
                 <Text style={s.convertBtnTitle}>Opportunity</Text>
                 <Text style={s.convertBtnSub}>Something worth tracking long term</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity style={s.convertBtn} onPress={() => setStep('task')} activeOpacity={0.8}>
-              <Text style={s.convertBtnIcon}>📋</Text>
               <View>
                 <Text style={s.convertBtnTitle}>Task</Text>
                 <Text style={s.convertBtnSub}>Something I need to do</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity style={s.convertBtn} onPress={() => setStep('milestone')} activeOpacity={0.8}>
-              <Text style={s.convertBtnIcon}>📅</Text>
               <View>
                 <Text style={s.convertBtnTitle}>Milestone</Text>
                 <Text style={s.convertBtnSub}>Something that happened or is scheduled</Text>
