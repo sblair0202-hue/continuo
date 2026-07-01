@@ -17,6 +17,91 @@ from app.services.field_intelligence_engine import extract_field_intelligence, e
 router = APIRouter()
 
 
+_TERRITORY_ACCOUNTS = [
+    {"name": "Ascension St. Vincent Rehab - Brownsburg",        "address": "1240 N Green St",                    "city": "Brownsburg",   "state": "IN", "zip": "46112", "phone": "317-415-6040", "fax": "317-415-6045"},
+    {"name": "Ascension St. Vincent Rehab - Naab Rd",           "address": "8550 Naab Rd, Ste 100",              "city": "Indianapolis", "state": "IN", "zip": "46260", "phone": "317-338-3364", "fax": "317-338-6491"},
+    {"name": "Franciscan Health Rehabilitation - South Emerson", "address": "8051 S Emerson Ave, Suite 100",      "city": "Indianapolis", "state": "IN", "zip": "46237", "phone": "317-508-4098", "fax": "317-528-6696"},
+    {"name": "Franciscan Health Rehabilitation - North Meridian","address": "12188B N Meridian St, Ste 260",      "city": "Carmel",       "state": "IN", "zip": "46032", "phone": "317-528-8494", "fax": "317-528-6696"},
+    {"name": "Franciscan Health Rehabilitation - Mooresville",   "address": "1201 Hadley Road",                   "city": "Mooresville",  "state": "IN", "zip": "46158", "phone": "317-834-4413", "fax": "317-528-6696"},
+    {"name": "NeuroHope",                                        "address": "1300 E 96th St",                     "city": "Indianapolis", "state": "IN", "zip": "46240", "phone": "317-525-8386", "fax": "844-556-4672"},
+    {"name": "Restorative Health and Wellness",                  "address": "10293 N Meridian St, Suite 200",     "city": "Indianapolis", "state": "IN", "zip": "46290", "phone": "317-505-1410", "fax": "463-306-1031"},
+    {"name": "Physical Therapy & Rehab - Stones Crossing",       "address": "3000 State Rd 135, Suite 110",       "city": "Greenwood",    "state": "IN", "zip": "46143", "phone": "317-497-6000", "fax": "317-497-2514"},
+    {"name": "Physical Therapy & Rehab - Neuro Specialty Clinic","address": "8051 S Emerson Ave, Suite 450",      "city": "Indianapolis", "state": "IN", "zip": "46237", "phone": "317-528-8111", "fax": "317-621-3004"},
+    {"name": "IU Health Neurorehabilitation & Robotics",         "address": "355 W 16th St",                      "city": "Indianapolis", "state": "IN", "zip": "46202", "phone": "317-963-7050", "fax": "317-963-7055"},
+    {"name": "Parkview Randallia Outpatient Therapy",            "address": "2200 Randallia Dr",                  "city": "Fort Wayne",   "state": "IN", "zip": "46805", "phone": "260-373-3202", "fax": "260-373-3223"},
+    {"name": "Salience Neuro Rehab",                             "address": "8902 N Meridian St, Suite 200",      "city": "Indianapolis", "state": "IN", "zip": "46260", "phone": "812-998-6176", "fax": "812-901-6129"},
+    {"name": "Rehab Without Walls - Greenwood",                  "address": "704 S State Rd 135, Suite D",        "city": "Greenwood",    "state": "IN", "zip": "46143", "phone": "317-324-3765", "fax": "317-324-3768"},
+    # From email — Franciscan sites with full referral pathway
+    {"name": "Franciscan Health Crawfordsville",                 "address": None,                                 "city": "Crawfordsville","state":"IN", "zip": None,    "phone": "765-362-6740", "fax": "765-362-6750",
+     "referral_instructions": "OT eval and treat for Vivistim. Fax referral to (765) 362-6750. State: 'OT eval and treat for Vivistim.' Phone follow-up: (765) 362-6740.",
+     "contacts": [
+         {"name": "AJ Ehrlich",       "role": "Primary OT",   "discipline": "OT, CHT",  "email": "aj.ehrlich@franciscanalliance.org"},
+         {"name": "Anna Kamhausen",   "role": "Primary OT",   "discipline": "COTA",     "email": "anna.kamhausen@franciscanalliance.org"},
+         {"name": "Annare L Loubser", "role": "Supervisor",   "discipline": None,       "email": "annare.loubser@franciscanalliance.org"},
+     ]},
+    {"name": "Franciscan Health Lafayette",                      "address": None,                                 "city": "Lafayette",    "state": "IN", "zip": None,    "phone": None,           "fax": "765-423-6099",
+     "referral_instructions": "OT eval and treat for Vivistim. Fax referral to (765) 423-6099.",
+     "contacts": [
+         {"name": "Adam Ewald",       "role": "Primary OT",   "discipline": "OT",       "email": "Adam.Ewald@franciscanalliance.org"},
+         {"name": "Natalie Milakis",  "role": "Primary OT",   "discipline": "OT",       "email": "Natalie.Milakis@franciscanalliance.org"},
+         {"name": "Erin P Charters",  "role": "Supervisor",   "discipline": None,       "email": "Erin.Charters@franciscanalliance.org"},
+         {"name": "Annare L Loubser", "role": "Supervisor",   "discipline": None,       "email": "AnnareL.Loubser@franciscanalliance.org"},
+     ]},
+]
+
+_DEFAULT_REFERRAL = "OT/PT Eval and treat for Vivistim"
+
+
+@router.post("/admin/seed-territory")
+def seed_territory(db: Session = Depends(get_db)):
+    """Upsert Sarah's Indiana territory accounts with addresses, phone, fax, and referral info."""
+    from sqlalchemy import func as _func
+    upserted, contacts_added = 0, 0
+
+    for data in _TERRITORY_ACCOUNTS:
+        key = data["name"].lower()
+        account = db.query(Account).filter(_func.lower(Account.name) == key).first()
+        if not account:
+            account = Account(name=data["name"], status="active", momentum="unknown")
+            db.add(account)
+            db.flush()
+
+        if data.get("address") and not account.address:
+            addr = data["address"]
+            if data.get("zip"):
+                addr += f", {data['city']}, {data['state']} {data['zip']}"
+            account.address = addr
+        if data.get("city") and not account.city:
+            account.city = data["city"]
+        if data.get("state") and not account.state:
+            account.state = data["state"]
+        if data.get("phone") and not account.phone:
+            account.phone = data["phone"]
+        if data.get("fax") and not account.fax:
+            account.fax = data["fax"]
+        if not account.referral_instructions:
+            account.referral_instructions = data.get("referral_instructions", _DEFAULT_REFERRAL)
+
+        for c_data in data.get("contacts", []):
+            existing = db.query(Contact).filter(
+                Contact.account_id == account.id,
+                _func.lower(Contact.name) == c_data["name"].lower(),
+            ).first()
+            if not existing:
+                db.add(Contact(
+                    account_id=account.id,
+                    name=c_data["name"],
+                    role=c_data.get("role"),
+                    discipline=c_data.get("discipline"),
+                    email=c_data.get("email"),
+                ))
+                contacts_added += 1
+        upserted += 1
+
+    db.commit()
+    return {"accounts_upserted": upserted, "contacts_added": contacts_added}
+
+
 @router.get("/debug/anthropic")
 def debug_anthropic():
     """No-auth: test Anthropic API key and model connectivity."""

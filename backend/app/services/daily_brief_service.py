@@ -25,13 +25,16 @@ def generate_daily_brief(signals: list, tasks: list, meetings: list, accounts: l
 
     momentum_str = ", ".join(f"{v} {k}" for k, v in momentum_summary.items() if k != "unknown")
 
-    prompt = f"""You are an AI Chief of Staff briefing a medical device sales rep at the start of their day.
+    account_names = ", ".join(a.name for a in accounts[:8]) if accounts else "none yet"
+
+    prompt = f"""You are an AI Chief of Staff briefing a Vivistim Therapy Development Specialist at the start of their day. This rep develops therapy programs at outpatient rehabilitation clinics and coordinates with occupational therapists, surgeons, and care navigators.
 
 Today is {datetime.now().strftime('%A, %B %d')}.
 
-Territory momentum: {momentum_str or 'no data yet'}
+Territory accounts: {account_names}
+Territory momentum: {momentum_str or 'mixed — early stage'}
 
-Today's meetings:
+Today's meetings/calendar:
 {meeting_lines}
 
 High/medium impact signals requiring attention:
@@ -40,13 +43,9 @@ High/medium impact signals requiring attention:
 High-priority open tasks:
 {task_lines}
 
-Write a 4-6 sentence daily brief covering:
-1. The single most important thing to focus on today
-2. Any meetings that need preparation or follow-up
-3. The top signal or risk in the territory
-4. One concrete action to drive momentum
+Write a 3-5 sentence daily brief. If there are meetings today, lead with preparation for those. If no meetings, lead with proactive territory action. Mention specific account names when relevant. End with one concrete action for today.
 
-Be direct, specific, and motivating. Write in second person ("You have...", "Your top priority..."). No bullet points — flowing prose only."""
+Be direct, specific, and grounded in the actual data above — do not invent facts. Write in second person. No bullet points — flowing prose only."""
 
     client = anthropic.Anthropic()
     message = client.messages.create(

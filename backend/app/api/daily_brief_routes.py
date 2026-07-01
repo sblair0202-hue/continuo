@@ -31,9 +31,10 @@ def get_daily_brief(user_id: str = Depends(get_current_user), db: Session = Depe
     high_signals = [s for s in signals if s.status == "new" and s.impact_level in ("high", "medium")]
     open_tasks = [t for t in tasks if t.status == "open" and t.priority == "high"]
 
-    if not signals and not tasks and not accounts:
+    # Only show empty state when there are truly no accounts at all
+    if not accounts and not meetings:
         return {
-            "brief": "Your territory is empty — submit your first recap to start building intelligence.",
+            "brief": "Add your first account to get started — or tap the Orb and speak a recap from today.",
             "generated_at": datetime.utcnow().isoformat(),
             "signal_count": 0,
             "task_count": 0,

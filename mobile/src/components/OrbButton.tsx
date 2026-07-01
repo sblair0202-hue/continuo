@@ -1,10 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Colors } from '../constants/colors';
 import { useOrb, OrbState } from '../context/OrbContext';
+
+const ORB = 58;
+const ORBIT_R = 42; // pixels from orb center to dot
 
 interface OrbButtonProps {
   onPress: () => void;
@@ -12,7 +15,6 @@ interface OrbButtonProps {
   queueCount?: number;
 }
 
-// Ring-only mark for the nav orb (centered circle, not the full bead trail)
 function NavRingMark() {
   return (
     <Svg width={28} height={28} viewBox="0 0 120 120" fill="none">
@@ -21,114 +23,219 @@ function NavRingMark() {
   );
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function stateAuraColor(state: OrbState): string {
+  switch (state) {
+    case 'listening':   return Colors.sky;
+    case 'thinking':    return Colors.sky;
+    case 'needsReview': return Colors.clay;
+    case 'syncing':     return Colors.sage;
+    case 'complete':    return Colors.sage;
+    default:            return Colors.ink;
+  }
+}
+
+function stateGradient(state: OrbState): [string, string] {
+  switch (state) {
+    case 'listening':   return ['#5A7A96', '#2E4D66'];
+    case 'thinking':    return ['#4A6A86', '#28405A'];
+    case 'needsReview': return ['#8B6A42', '#5A4025'];
+    case 'syncing':     return ['#4A7A60', '#2A5040'];
+    case 'complete':    return ['#3A7050', '#1E4030'];
+    default:            return ['#6B5A50', '#3A2F28'];
+  }
+}
+
+// Three concentric rings creating a soft radial aura (no solid center fill)
+function AuraRings({ color, opacity }: { color: string; opacity: Animated.Value }) {
+  return (
+    <>
+      <Animated.View style={[s.auraRing, {
+        width: 78, height: 78, borderRadius: 39,
+        backgroundColor: hexToRgba(color, 0.18),
+        opacity,
+      }]} />
+      <Animated.View style={[s.auraRing, {
+        width: 100, height: 100, borderRadius: 50,
+        backgroundColor: hexToRgba(color, 0.09),
+        opacity,
+      }]} />
+      <Animated.View style={[s.auraRing, {
+        width: 124, height: 124, borderRadius: 62,
+        backgroundColor: hexToRgba(color, 0.045),
+        opacity,
+      }]} />
+    </>
+  );
+}
+
+// A dot that orbits at ORBIT_R from the orb center, offset by offsetDeg degrees
+function OrbitDot({ angle, offsetDeg, color, dotOpacity }: {
+  angle: Animated.Value;
+  offsetDeg: number;
+  color: string;
+  dotOpacity: number;
+}) {
+  const containerSize = ORBIT_R * 2 + 12;
+  const half = containerSize / 2;
+  const rotate = angle.interpolate({
+    inputRange: [0, 1],
+    outputRange: [`${offsetDeg}deg`, `${offsetDeg + 360}deg`],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        width: containerSize,
+        height: containerSize,
+        top: -(half - ORB / 2),
+        left: -(half - ORB / 2),
+        alignItems: 'center',
+        transform: [{ rotate }],
+      }}
+    >
+      {/* Dot sits at the top edge (= ORBIT_R above center) */}
+      <View style={{
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
+        backgroundColor: color,
+        opacity: dotOpacity,
+        marginTop: half - ORBIT_R - 2.5,
+      }} />
+    </Animated.View>
+  );
+}
+
 function useOrbAnimation(orbState: OrbState) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const haloOpacity = useRef(new Animated.Value(0.55)).current;
+  const scale      = useRef(new Animated.Value(1)).current;
+  const opacity    = useRef(new Animated.Value(1)).current;
+  const auraOp     = useRef(new Animated.Value(0.18)).current;
+  const orbitAngle = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     scale.stopAnimation();
     opacity.stopAnimation();
-    haloOpacity.stopAnimation();
+    auraOp.stopAnimation();
+    orbitAngle.stopAnimation();
 
-    let loop: Animated.CompositeAnimation | null = null;
+    let loops: Animated.CompositeAnimation[] = [];
 
     switch (orbState) {
-      case 'listening':
-        loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(haloOpacity, { toValue: 0.85, duration: 1700, useNativeDriver: true }),
-            Animated.timing(haloOpacity, { toValue: 0.4, duration: 1700, useNativeDriver: true }),
-          ])
+      case 'listening': {
+        const aL = Animated.loop(Animated.sequence([
+          Animated.timing(auraOp, { toValue: 0.92, duration: 1600, useNativeDriver: true }),
+          Animated.timing(auraOp, { toValue: 0.38, duration: 1600, useNativeDriver: true }),
+        ]));
+        const sL = Animated.loop(Animated.sequence([
+          Animated.timing(scale, { toValue: 1.07, duration: 700, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1.0,  duration: 700, useNativeDriver: true }),
+        ]));
+        const oL = Animated.loop(
+          Animated.timing(orbitAngle, { toValue: 1, duration: 4200, easing: Easing.linear, useNativeDriver: true })
         );
-        loop.start();
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(scale, { toValue: 1.08, duration: 700, useNativeDriver: true }),
-            Animated.timing(scale, { toValue: 1.0, duration: 700, useNativeDriver: true }),
-          ])
-        ).start();
+        aL.start(); sL.start(); oL.start();
+        loops = [aL, sL, oL];
         break;
-
-      case 'thinking':
-        loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(opacity, { toValue: 0.6, duration: 1000, useNativeDriver: true }),
-            Animated.timing(opacity, { toValue: 1.0, duration: 1000, useNativeDriver: true }),
-          ])
+      }
+      case 'thinking': {
+        const aL = Animated.loop(Animated.sequence([
+          Animated.timing(auraOp, { toValue: 0.85, duration: 800, useNativeDriver: true }),
+          Animated.timing(auraOp, { toValue: 0.28, duration: 800, useNativeDriver: true }),
+        ]));
+        const oL = Animated.loop(
+          Animated.timing(orbitAngle, { toValue: 1, duration: 2400, easing: Easing.linear, useNativeDriver: true })
         );
-        loop.start();
+        aL.start(); oL.start();
+        loops = [aL, oL];
         break;
-
-      case 'needsReview':
-        loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(haloOpacity, { toValue: 0.7, duration: 1200, useNativeDriver: true }),
-            Animated.timing(haloOpacity, { toValue: 0.25, duration: 1200, useNativeDriver: true }),
-          ])
-        );
-        loop.start();
+      }
+      case 'needsReview': {
+        const aL = Animated.loop(Animated.sequence([
+          Animated.timing(auraOp, { toValue: 0.8,  duration: 1100, useNativeDriver: true }),
+          Animated.timing(auraOp, { toValue: 0.22, duration: 1100, useNativeDriver: true }),
+        ]));
+        aL.start();
+        loops = [aL];
         break;
-
-      case 'syncing':
-        loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(opacity, { toValue: 0.5, duration: 800, useNativeDriver: true }),
-            Animated.timing(opacity, { toValue: 1.0, duration: 800, useNativeDriver: true }),
-          ])
-        );
-        loop.start();
+      }
+      case 'syncing': {
+        const oL = Animated.loop(Animated.sequence([
+          Animated.timing(opacity, { toValue: 0.5, duration: 720, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 1.0, duration: 720, useNativeDriver: true }),
+        ]));
+        auraOp.setValue(0.55);
+        oL.start();
+        loops = [oL];
         break;
-
+      }
       case 'complete':
         Animated.sequence([
-          Animated.timing(scale, { toValue: 1.18, duration: 180, useNativeDriver: true }),
-          Animated.timing(scale, { toValue: 1.0, duration: 320, useNativeDriver: true }),
+          Animated.timing(scale,  { toValue: 1.2, duration: 160, useNativeDriver: true }),
+          Animated.timing(scale,  { toValue: 1.0, duration: 300, useNativeDriver: true }),
         ]).start();
+        auraOp.setValue(0.8);
+        Animated.timing(auraOp, { toValue: 0, duration: 1100, useNativeDriver: true }).start();
         break;
 
       default: // idle
         Animated.parallel([
-          Animated.timing(scale, { toValue: 1.0, duration: 250, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 1.0, duration: 250, useNativeDriver: true }),
-          Animated.timing(haloOpacity, { toValue: 0.55, duration: 300, useNativeDriver: true }),
+          Animated.timing(scale,   { toValue: 1.0, duration: 240, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 1.0, duration: 240, useNativeDriver: true }),
+          Animated.timing(auraOp,  { toValue: 0.18, duration: 280, useNativeDriver: true }),
         ]).start();
+        orbitAngle.setValue(0);
     }
 
-    return () => { if (loop) loop.stop(); };
+    return () => loops.forEach(l => l.stop());
   }, [orbState]);
 
-  return { scale, opacity, haloOpacity };
+  return { scale, opacity, auraOp, orbitAngle };
 }
-
-const ORB = 58;
 
 export function OrbButton({ onPress, onLongPress, queueCount = 0 }: OrbButtonProps) {
   const { orbState } = useOrb();
-  const { scale, opacity, haloOpacity } = useOrbAnimation(orbState);
-
-  const haloColor = orbState === 'needsReview'
-    ? 'rgba(200,166,122,0.45)'   // clay/amber
-    : 'rgba(122,159,194,0.38)';  // sky
+  const { scale, opacity, auraOp, orbitAngle } = useOrbAnimation(orbState);
+  const auraCol   = stateAuraColor(orbState);
+  const [g1, g2]  = stateGradient(orbState);
+  const showOrbit = orbState === 'listening' || orbState === 'thinking';
+  const dotColor  = hexToRgba(Colors.reversed, 0.75);
 
   return (
     <View style={s.container} pointerEvents="box-none">
-      {/* Soft halo behind the orb */}
-      <Animated.View
-        style={[s.halo, { opacity: haloOpacity, backgroundColor: haloColor }]}
-        pointerEvents="none"
-      />
-
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
         delayLongPress={380}
         style={s.pressableContainer}
       >
-        <Animated.View style={{ transform: [{ scale }, { translateY: -14 }], opacity }}>
+        <Animated.View style={[s.orbWrap, { transform: [{ scale }, { translateY: -14 }], opacity }]}>
+          {/* Aura rings (position: absolute, centered on orb) */}
+          <View style={s.auraLayer} pointerEvents="none">
+            <AuraRings color={auraCol} opacity={auraOp} />
+          </View>
+
+          {/* Orbiting dots */}
+          {showOrbit && (
+            <View style={[StyleSheet.absoluteFill, { overflow: 'visible' }]} pointerEvents="none">
+              <OrbitDot angle={orbitAngle} offsetDeg={0}   color={dotColor} dotOpacity={0.85} />
+              <OrbitDot angle={orbitAngle} offsetDeg={120} color={dotColor} dotOpacity={0.50} />
+              <OrbitDot angle={orbitAngle} offsetDeg={240} color={dotColor} dotOpacity={0.25} />
+            </View>
+          )}
+
+          {/* The orb */}
           <View style={s.orb}>
             <LinearGradient
-              colors={['#6B5A50', '#3A2F28']}
+              colors={[g1, g2]}
               start={{ x: 0.38, y: 0.18 }}
               end={{ x: 0.62, y: 1.0 }}
               style={[StyleSheet.absoluteFill, { borderRadius: ORB / 2 }]}
@@ -138,7 +245,6 @@ export function OrbButton({ onPress, onLongPress, queueCount = 0 }: OrbButtonPro
         </Animated.View>
       </Pressable>
 
-      {/* Review queue badge */}
       {queueCount > 0 && (
         <View style={s.badge} pointerEvents="none" />
       )}
@@ -157,12 +263,24 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  halo: {
+  orbWrap: {
+    width: ORB,
+    height: ORB,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  auraLayer: {
     position: 'absolute',
-    bottom: 14,
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  auraRing: {
+    position: 'absolute',
   },
   orb: {
     width: ORB,
@@ -175,7 +293,6 @@ const s = StyleSheet.create({
     shadowOpacity: 0.32,
     shadowRadius: 22,
     elevation: 12,
-    // 5px page-bg ring punch (border approximation)
     borderWidth: 5,
     borderColor: Colors.paper,
   },
