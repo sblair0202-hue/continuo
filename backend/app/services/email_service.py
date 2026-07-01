@@ -73,13 +73,11 @@ def refresh_if_needed(token_row) -> Credentials:
     try:
         is_expired = creds.expired
     except TypeError:
-        # google-auth stores expiry as naive UTC but newer utcnow() is tz-aware
-        if creds.expiry:
-            expiry = creds.expiry if creds.expiry.tzinfo else creds.expiry.replace(tzinfo=timezone.utc)
-            is_expired = datetime.now(timezone.utc) >= expiry
-        else:
-            is_expired = False
-    if is_expired and creds.refresh_token:
+        # google-auth stores expiry as naive UTC but newer utcnow() is tz-aware.
+        # Force a refresh so google-auth rebuilds expiry as tz-aware, fixing
+        # subsequent internal valid/expired checks during .execute().
+        is_expired = True
+    if (is_expired or creds.expiry is None) and creds.refresh_token:
         creds.refresh(Request())
         token_row.access_token = creds.token
         token_row.expiry = creds.expiry.replace(tzinfo=None) if creds.expiry else None
