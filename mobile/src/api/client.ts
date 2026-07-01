@@ -100,8 +100,6 @@ export const api = {
     request<Task[]>(`/tasks${accountId != null ? `?account_id=${accountId}` : ''}`),
   getTask: (id: number) =>
     request<Task & { account_name: string | null }>(`/tasks/${id}`),
-  deleteTask: (id: number) =>
-    request<{ status: string }>(`/tasks/${id}`, { method: 'DELETE' }),
   getActivities: (accountId?: number) =>
     request<Activity[]>(`/activities${accountId != null ? `?account_id=${accountId}` : ''}`),
   getAccounts: () => request<Account[]>('/accounts'),

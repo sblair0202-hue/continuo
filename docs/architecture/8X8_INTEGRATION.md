@@ -15,7 +15,22 @@ This maps directly to roadmap Priority 2 (integrations that feel connected) and 
 
 ---
 
-## The gating question: PHI + HIPAA (resolve BEFORE any build)
+## CHOSEN v1 MODEL (2026-07-01): outbound-only, no ingestion
+
+Sarah's call: **Continuo only SENDS texts; it never reads inbound replies.** Replies go to the 8x8 app, not Continuo. This is the v1 architecture.
+
+Why this is much safer and simpler:
+- **No inbound webhook, no reply storage, no conversation timeline** — Continuo never ingests a patient/provider message.
+- Continuo only handles an outbound message the user composed/approved, in transit, to send it.
+- Combined with provider/staff-only scope, the PHI surface nearly disappears.
+
+Flow: AI drafts a follow-up text (from a recap, like the email follow-up assistant) → user reviews/edits → Continuo sends via 8x8 SMS API → optionally logs "Texted [contact]" as an Activity. Nothing more.
+
+What we DON'T build in v1: inbound webhook (`/8x8/inbound`), reply ingestion, delivery-status storage, message threads.
+
+Remaining caution: even outbound texts pass through 8x8; if the user ever texts a patient, confirm 8x8 terms first. For provider/staff outbound, risk is minimal.
+
+## The gating question: PHI + HIPAA (only fully relevant if we later ingest inbound)
 
 **This is the reason 8x8 is deferred.** Texts with patients/caregivers may contain PHI. Continuo's security principle requires HIPAA-readiness.
 

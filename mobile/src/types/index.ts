@@ -110,6 +110,7 @@ export interface Task {
   status: TaskStatus;
   task_type: string | null;
   category: TaskCategory | null;
+  source_type?: string | null;
 }
 
 export type OpportunityStatus = 'new' | 'active' | 'waiting' | 'won' | 'lost';
