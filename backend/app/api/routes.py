@@ -17,6 +17,28 @@ from app.services.field_intelligence_engine import extract_field_intelligence, e
 router = APIRouter()
 
 
+@router.get("/debug/anthropic")
+def debug_anthropic():
+    """No-auth: test Anthropic API key and model connectivity."""
+    import os, traceback
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    result = {"key_set": bool(key), "key_prefix": key[:12] if key else None}
+    try:
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=16,
+            messages=[{"role": "user", "content": "Reply with the word OK."}],
+        )
+        result["api_ok"] = True
+        result["response"] = msg.content[0].text.strip()
+    except Exception:
+        result["api_ok"] = False
+        result["error"] = traceback.format_exc()
+    return result
+
+
 def get_or_create_account(
     db: Session,
     name: str,
