@@ -70,7 +70,16 @@ def _build_credentials(token_row) -> Credentials:
 
 def refresh_if_needed(token_row) -> Credentials:
     creds = _build_credentials(token_row)
-    if creds.expired and creds.refresh_token:
+    try:
+        is_expired = creds.expired
+    except TypeError:
+        # google-auth stores expiry as naive UTC but newer utcnow() is tz-aware
+        if creds.expiry:
+            expiry = creds.expiry if creds.expiry.tzinfo else creds.expiry.replace(tzinfo=timezone.utc)
+            is_expired = datetime.now(timezone.utc) >= expiry
+        else:
+            is_expired = False
+    if is_expired and creds.refresh_token:
         creds.refresh(Request())
         token_row.access_token = creds.token
         token_row.expiry = creds.expiry.replace(tzinfo=None) if creds.expiry else None
