@@ -237,12 +237,14 @@ def extract_account_data_from_emails(emails: list[dict]) -> list[dict]:
 
     prompt = f"""You are helping a medical device sales rep extract account information from their emails.
 
-Analyze these emails and extract any healthcare organization (hospital, clinic, rehab center, health system) contact details mentioned.
+Analyze these emails and extract SPECIFIC healthcare sites/clinics/locations (a named rehab center, therapy clinic, or hospital campus) with their contact details.
+
+IMPORTANT: Do NOT create an account for a parent health SYSTEM or corporate brand. Skip generic system names like "Franciscan Alliance", "Franciscan Health" (with no site), "Parkview Health", "IU Health", "Ascension", "Community Health Network". Only extract a specific site/location (e.g. "Franciscan Health Lafayette", "Parkview Randallia"). If only the parent system is identifiable and no specific site, SKIP it entirely.
 
 Emails:
 {emails_text}
 
-Extract all healthcare accounts you find. For each, return:
+Extract all specific healthcare sites you find. For each, return:
 {{
   "name": "organization name",
   "phone": "phone number or null",
