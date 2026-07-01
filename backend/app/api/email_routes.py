@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.domain import Account, Contact, EmailToken, Signal
+from app.models.domain import Account, Contact, EmailToken, Signal, Task
 from app.services.email_service import extract_account_data_from_emails
 from app.services import email_service
 from typing import Optional
@@ -321,8 +321,41 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
                     existing.role = c_data["role"]
 
     db.commit()
+
+    # Extract action items / tasks from the same emails
+    tasks_added = 0
+    try:
+        all_accounts = db.query(Account).all()
+        acct_by_name = {a.name.lower(): a for a in all_accounts}
+        raw_tasks = email_service.extract_tasks_from_emails(emails, all_accounts)
+        for t in raw_tasks:
+            title = (t.get("title") or "").strip()
+            if not title:
+                continue
+            acct = acct_by_name.get((t.get("account_name") or "").lower()) if t.get("account_name") else None
+            # Skip if an open task with the same title already exists
+            dup = db.query(Task).filter(
+                _func.lower(Task.title) == title.lower(),
+                Task.status == "open",
+            ).first()
+            if dup:
+                continue
+            db.add(Task(
+                account_id=acct.id if acct else None,
+                title=title,
+                description=t.get("description"),
+                priority=t.get("priority") if t.get("priority") in ("low", "medium", "high") else "medium",
+                status="open",
+                source_type="email",
+            ))
+            tasks_added += 1
+        db.commit()
+    except Exception:
+        db.rollback()
+
     return {
         "accounts_updated": accounts_updated,
         "contacts_added": contacts_added,
         "accounts_found_in_email": len(extracted),
+        "tasks_added": tasks_added,
     }

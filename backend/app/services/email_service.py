@@ -201,6 +201,63 @@ Rules:
     return json.loads(text) if text else []
 
 
+def extract_tasks_from_emails(emails: list[dict], accounts: list) -> list[dict]:
+    """Extract actionable follow-ups / to-dos from emails as task dicts."""
+    if not emails:
+        return []
+
+    account_names = [a.name for a in accounts]
+    account_str = ", ".join(account_names[:25]) or "None"
+
+    email_blocks = []
+    for e in emails[:15]:
+        block = f"FROM: {e['from']}\nSUBJECT: {e['subject']}\nSNIPPET: {e.get('snippet','')}"
+        if e.get("body"):
+            block += f"\nBODY EXCERPT: {e['body'][:800]}"
+        email_blocks.append(block)
+    emails_text = "\n\n---\n\n".join(email_blocks)
+
+    prompt = f"""You are analyzing a medical device sales rep's emails to extract concrete action items and follow-up tasks.
+
+Known accounts in their territory: {account_str}
+
+Emails:
+{emails_text}
+
+Extract every actionable task, follow-up, commitment, or to-do implied or stated in these emails. Examples: "send referral packet", "follow up on OT eval", "schedule training", "confirm reimbursement docs", "reply to therapist", "call back about scheduling".
+
+For each task return:
+{{
+  "title": "short imperative task (max 12 words, start with a verb)",
+  "description": "1 sentence of context including who/what",
+  "account_name": "exact account name from territory list above, or null if unclear",
+  "priority": "low|medium|high",
+  "due_hint": "any date/deadline mentioned, or null"
+}}
+
+Rules:
+- Only real action items the rep needs to do. Ignore newsletters, receipts, automated notifications, FYI-only messages.
+- Match account_name to the territory list when possible; otherwise null.
+- Return a JSON array. Return [] if no tasks found.
+- Return only valid JSON, no explanation."""
+
+    client = anthropic.Anthropic()
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = message.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    text = text.strip().rstrip("```").strip()
+
+    return json.loads(text) if text else []
+
+
 def extract_signals_from_emails(emails: list[dict], accounts: list) -> list[dict]:
     if not emails:
         return []
