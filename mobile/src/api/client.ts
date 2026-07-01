@@ -47,7 +47,17 @@ function friendlyError(status: number, body: string): string {
   if (status >= 500) return 'The server ran into a problem. Try again in a moment.';
   try {
     const parsed = JSON.parse(body);
-    return parsed.detail ?? body;
+    const detail = parsed.detail;
+    if (typeof detail === 'string') return detail;
+    // FastAPI validation errors: detail is an array of {loc, msg, type}
+    if (Array.isArray(detail)) {
+      const msgs = detail
+        .map((d: any) => (typeof d === 'string' ? d : d?.msg))
+        .filter(Boolean);
+      if (status === 422) return "Some fields couldn't be saved. Please try again.";
+      return msgs.join('; ') || `Error ${status}`;
+    }
+    return typeof body === 'string' ? body : `Error ${status}`;
   } catch {
     return body || `Error ${status}`;
   }
@@ -118,6 +128,8 @@ export const api = {
       `/voice-journal/${id}/salesforce-prep`,
       { timeoutMs: 30000 }
     ),
+  discardJournal: (id: number) =>
+    request<{ status: string }>(`/voice-journal/${id}`, { method: 'DELETE' }),
   getReviewQueue: () =>
     request<Array<{ id: number; ai_summary: string | null; preview: string | null; source: string; created_at: string }>>(
       '/voice-journal/queue'

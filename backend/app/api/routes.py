@@ -333,6 +333,17 @@ def create_voice_journal(payload: VoiceJournalCreate, db: Session = Depends(get_
     )
 
 
+@router.delete("/voice-journal/{entry_id}")
+def delete_voice_journal(entry_id: int, db: Session = Depends(get_db)):
+    """Discard a captured note entirely (nothing committed to the knowledge base)."""
+    entry = db.query(VoiceJournalEntry).filter(VoiceJournalEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Voice journal entry not found")
+    db.delete(entry)
+    db.commit()
+    return {"status": "deleted", "voice_journal_entry_id": entry_id}
+
+
 @router.post("/voice-journal/{entry_id}/save-for-later")
 def save_for_later(entry_id: int, db: Session = Depends(get_db)):
     """Mark entry as pending review without committing extracted objects."""

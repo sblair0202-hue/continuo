@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Clipboard,
   Easing,
@@ -306,7 +307,11 @@ export default function ReviewScreen() {
       accounts: accounts.filter(a => a.kept).map(a => ({ ...({} as any), name: a.name })),
       contacts: people.filter(p => p.kept).map(p => ({ ...({} as any), name: p.name, role: p.role, account_name: p.account_name })),
       tasks: tasks.filter(t => t.kept).map(t => ({ ...({} as any), title: t.title, account_name: t.account_name })),
-      activities: activities.filter(a => a.kept).map(a => ({ type: a.type, account_name: a.account_name })),
+      activities: activities.filter(a => a.kept).map(a => ({
+        activity_type: a.type || 'visit',
+        summary: a.type || 'Field activity',
+        account_name: a.account_name || null,
+      })),
       signals: filteredSignals,
     };
 
@@ -337,6 +342,23 @@ export default function ReviewScreen() {
     }
   }
 
+  function handleDiscard() {
+    Alert.alert(
+      'Discard this note?',
+      'This deletes the capture. Nothing will be saved to your accounts.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Discard', style: 'destructive',
+          onPress: async () => {
+            try { await api.discardJournal(Number(id)); } catch {}
+            router.replace('/');
+          },
+        },
+      ]
+    );
+  }
+
   const isSaving = savePhase === 'saving' || savePhase === 'savingLater';
   const keptOpps = opportunities.filter(o => o.kept);
   const keptMiles = milestones.filter(m => m.kept);
@@ -359,9 +381,9 @@ export default function ReviewScreen() {
               <Text style={s.backBtnText}>‹</Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
-            <View style={s.sourceChip}>
-              <Text style={s.sourceChipText}>🎙 Voice note</Text>
-            </View>
+            <TouchableOpacity style={s.discardBtn} onPress={handleDiscard} activeOpacity={0.7} disabled={isSaving}>
+              <Text style={s.discardBtnText}>Discard</Text>
+            </TouchableOpacity>
           </View>
           <View style={s.titleBlock}>
             <Text style={s.titleText}>Review</Text>
@@ -651,6 +673,8 @@ const s = StyleSheet.create({
     backgroundColor: Colors.linen,
   },
   sourceChipText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12, color: Colors.graphite },
+  discardBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.roseTint },
+  discardBtnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: Colors.critical },
 
   titleBlock: { paddingTop: 12, paddingBottom: 20 },
   titleText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 30, lineHeight: 34, letterSpacing: -0.6, color: Colors.inkDark },
