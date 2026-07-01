@@ -365,6 +365,7 @@ export default function TodayScreen() {
                 done={!!taskDone[task.id]}
                 accountName={task.account_id != null ? accountMap[task.account_id] : undefined}
                 onToggle={() => toggleTask(task)}
+                onOpen={() => router.push(`/task/${task.id}`)}
               />
             ))
           )}
@@ -487,16 +488,18 @@ function NowMarker() {
 }
 
 // ── Task row ──────────────────────────────────────────────────────────────────
-function TaskRow({ task, done, accountName, onToggle }: {
-  task: Task; done: boolean; accountName?: string; onToggle: () => void;
+function TaskRow({ task, done, accountName, onToggle, onOpen }: {
+  task: Task; done: boolean; accountName?: string; onToggle: () => void; onOpen: () => void;
 }) {
   const isOverdue = !done && !!task.due_date && new Date(task.due_date) < new Date();
   return (
-    <TouchableOpacity style={s.taskRow} onPress={onToggle} activeOpacity={0.7}>
-      <View style={done ? s.cbDone : s.cb}>
-        {done && <Text style={s.cbCheck}>✓</Text>}
-      </View>
-      <View style={{ flex: 1 }}>
+    <View style={s.taskRow}>
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <View style={done ? s.cbDone : s.cb}>
+          {done && <Text style={s.cbCheck}>✓</Text>}
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity style={{ flex: 1 }} onPress={onOpen} activeOpacity={0.6}>
         <Text style={[s.taskTitle, done && s.taskTitleDone]}>{task.title}</Text>
         {(accountName || isOverdue) ? (
           <Text style={s.taskMeta}>
@@ -504,8 +507,9 @@ function TaskRow({ task, done, accountName, onToggle }: {
             {accountName ?? ''}
           </Text>
         ) : null}
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+      <Text style={s.taskChevron}>›</Text>
+    </View>
   );
 }
 
@@ -633,6 +637,7 @@ const s = StyleSheet.create({
   taskTitle:    { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15.5, color: C.ink, lineHeight: 22 },
   taskTitleDone:{ color: C.ink3, textDecorationLine: 'line-through' },
   taskMeta:     { marginTop: 3, fontFamily: 'HankenGrotesk_500Medium', fontSize: 12.5, color: C.ink2, lineHeight: 18 },
+  taskChevron:  { fontSize: 20, color: C.ink3, marginLeft: 6 },
   overdue:      { color: C.red },
 
   // Signals

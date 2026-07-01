@@ -590,6 +590,27 @@ def list_tasks(account_id: Optional[int] = Query(None), db: Session = Depends(ge
     return q.all()
 
 
+@router.get("/tasks/{task_id}")
+def get_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    account = db.query(Account).filter(Account.id == task.account_id).first() if task.account_id else None
+    return {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "status": task.status,
+        "priority": task.priority,
+        "due_date": task.due_date,
+        "category": task.category,
+        "task_type": task.task_type,
+        "source_type": task.source_type,
+        "account_id": task.account_id,
+        "account_name": account.name if account else None,
+    }
+
+
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()

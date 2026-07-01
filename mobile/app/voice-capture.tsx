@@ -1,4 +1,5 @@
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -14,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '../src/api/client';
@@ -145,10 +146,12 @@ export default function VoiceCaptureScreen() {
     return () => { breatheLoop.current?.stop(); };
   }, []);
 
-  // Auto-start listening if requested
+  // Auto-start listening or photo capture if requested
   useEffect(() => {
     if (autoStart === 'true') {
       startListening();
+    } else if (initialMode === 'photo') {
+      setTimeout(() => launchPhotoCapture(), 200);
     }
   }, []);
 
@@ -240,7 +243,9 @@ export default function VoiceCaptureScreen() {
   }
 
   function handleOrbPress() {
-    if (stage === 'idle' || stage === 'type' || stage === 'photo') {
+    if (stage === 'photo') {
+      launchPhotoCapture();
+    } else if (stage === 'idle' || stage === 'type') {
       startListening();
     } else if (stage === 'listening') {
       stopListening();
@@ -253,6 +258,43 @@ export default function VoiceCaptureScreen() {
       ExpoSpeechRecognitionModule.abort();
     }
     setStage(newMode);
+    if (newMode === 'photo') {
+      // Give the UI a beat to switch, then open the picker
+      setTimeout(() => launchPhotoCapture(), 120);
+    }
+  }
+
+  async function launchPhotoCapture() {
+    setError(null);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // Offer camera if granted, else fall back to library
+      const useCamera = perm.granted;
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.6, allowsEditing: false })
+        : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.6, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+      if (result.canceled || !result.assets?.[0]?.base64) {
+        return;
+      }
+      if (!useCamera && !lib.granted) {
+        setError('Photo access needed. Allow in Settings.');
+        return;
+      }
+      const asset = result.assets[0];
+      const mediaType = asset.mimeType ?? 'image/jpeg';
+      setStage('understanding');
+      const { extracted_text } = await api.extractFromImage(asset.base64!, mediaType);
+      if (!extracted_text || !extracted_text.trim()) {
+        setError('Could not read any text from that photo. Try another.');
+        setStage('photo');
+        return;
+      }
+      await analyzeAndNavigate(extracted_text);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Photo capture failed. Try again.');
+      setStage('photo');
+    }
   }
 
   const displayText = stage === 'listening'
@@ -353,15 +395,50 @@ export default function VoiceCaptureScreen() {
   );
 }
 
+function MicGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Rect x="9" y="2" width="6" height="11" rx="3" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <Path d="M5 11a7 7 0 0014 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Line x1="12" y1="18" x2="12" y2="22" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Line x1="9" y1="22" x2="15" y2="22" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function KeyboardGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Rect x="2" y="6" width="20" height="12" rx="2.5" stroke={color} strokeWidth="1.8" />
+      <Line x1="6" y1="10" x2="6" y2="10" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Line x1="10" y1="10" x2="10" y2="10" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Line x1="14" y1="10" x2="14" y2="10" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Line x1="18" y1="10" x2="18" y2="10" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Line x1="8" y1="14" x2="16" y2="14" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function CameraGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth="1.8" />
+    </Svg>
+  );
+}
+
 function ModeButton({ icon, active, onPress }: { icon: string; active: boolean; onPress: () => void }) {
-  const icons: Record<string, string> = { mic: '🎙', keyboard: '⌨️', camera: '📷' };
+  const color = active ? Colors.paper : Colors.graphite;
   return (
     <TouchableOpacity
       style={[s.modeBtn, active && s.modeBtnActive]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={s.modeBtnIcon}>{icons[icon]}</Text>
+      {icon === 'mic' ? <MicGlyph color={color} />
+        : icon === 'keyboard' ? <KeyboardGlyph color={color} />
+        : <CameraGlyph color={color} />}
     </TouchableOpacity>
   );
 }
