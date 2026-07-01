@@ -109,6 +109,11 @@ export const api = {
       `/voice-journal/${id}/save-for-later`,
       { method: 'POST' }
     ),
+  getSalesforcePrep: (id: number) =>
+    request<{ entry_id: number; salesforce_note: string }>(
+      `/voice-journal/${id}/salesforce-prep`,
+      { timeoutMs: 30000 }
+    ),
   getReviewQueue: () =>
     request<Array<{ id: number; ai_summary: string | null; preview: string | null; source: string; created_at: string }>>(
       '/voice-journal/queue'

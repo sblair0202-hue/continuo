@@ -31,7 +31,7 @@ function momentumColor(m: string): string {
   if (['rising', 'increased', 'strong'].includes(m)) return C.green;
   if (['declining', 'decreased', 'at_risk'].includes(m)) return C.red;
   if (m === 'stable') return C.blue;
-  return C.ink3;
+  return C.orange; // unknown / new account → clay amber (visible, means "untouched")
 }
 
 const FILTER_LABELS: Record<string, string> = {

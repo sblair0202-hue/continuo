@@ -3,10 +3,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Clipboard,
   Easing,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -223,6 +226,40 @@ export default function ReviewScreen() {
   const [savePhase, setSavePhase] = useState<SavePhase>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  const [sfNote, setSfNote]             = useState<string | null>(null);
+  const [sfLoading, setSfLoading]       = useState(false);
+  const [sfModalVisible, setSfModal]    = useState(false);
+  const [sfCopied, setSfCopied]         = useState(false);
+
+  async function handleSfPrep() {
+    setSfLoading(true);
+    try {
+      const result = await api.getSalesforcePrep(Number(id));
+      setSfNote(result.salesforce_note);
+      setSfModal(true);
+    } catch {
+      setSfNote('Could not generate Salesforce update. Try again.');
+      setSfModal(true);
+    } finally {
+      setSfLoading(false);
+    }
+  }
+
+  function handleCopySf() {
+    if (sfNote) {
+      Clipboard.setString(sfNote);
+      setSfCopied(true);
+      setTimeout(() => setSfCopied(false), 2000);
+    }
+  }
+
+  async function handleEmailSf() {
+    if (!sfNote) return;
+    try {
+      await Share.share({ message: sfNote, title: 'Salesforce Activity Update' });
+    } catch { /* user cancelled */ }
+  }
 
   function showOverlay() {
     Animated.timing(overlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -502,6 +539,19 @@ export default function ReviewScreen() {
         {/* Pinned action bar */}
         <View style={[s.actionBar, { paddingBottom: insets.bottom + 14 }]}>
           {saveError ? <Text style={s.saveError}>{saveError}</Text> : null}
+
+          {/* Salesforce prep row */}
+          <TouchableOpacity
+            style={s.sfRow}
+            onPress={handleSfPrep}
+            disabled={sfLoading}
+            activeOpacity={0.72}
+          >
+            <Text style={s.sfRowText}>
+              {sfLoading ? 'Generating…' : 'Prepare Salesforce Update'}
+            </Text>
+          </TouchableOpacity>
+
           <View style={s.actionBtns}>
             <TouchableOpacity
               style={[s.saveLaterBtn, isSaving && s.btnDisabled]}
@@ -522,6 +572,34 @@ export default function ReviewScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Salesforce prep modal */}
+      <Modal
+        visible={sfModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSfModal(false)}
+      >
+        <View style={sf.screen}>
+          <View style={sf.header}>
+            <Text style={sf.title}>Salesforce Update</Text>
+            <TouchableOpacity onPress={() => setSfModal(false)} activeOpacity={0.7}>
+              <Text style={sf.closeBtn}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={sf.body} contentContainerStyle={{ paddingBottom: 40 }}>
+            <Text style={sf.note} selectable>{sfNote ?? ''}</Text>
+          </ScrollView>
+          <View style={sf.actions}>
+            <TouchableOpacity style={sf.btn} onPress={handleCopySf} activeOpacity={0.8}>
+              <Text style={sf.btnText}>{sfCopied ? 'Copied!' : 'Copy to Clipboard'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[sf.btn, sf.emailBtn]} onPress={handleEmailSf} activeOpacity={0.8}>
+              <Text style={[sf.btnText, sf.emailBtnText]}>Send to Email</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Save confirmation overlay */}
       {savePhase !== null && (
@@ -764,6 +842,19 @@ const s = StyleSheet.create({
   saveBtnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.surface },
   btnDisabled: { opacity: 0.6 },
 
+  // Salesforce row
+  sfRow: {
+    alignItems: 'center',
+    paddingVertical: 9,
+    marginBottom: 6,
+  },
+  sfRowText: {
+    fontFamily: 'HankenGrotesk_500Medium',
+    fontSize: 13.5,
+    color: Colors.graphite,
+    textDecorationLine: 'underline',
+  },
+
   // Save overlay
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -773,6 +864,37 @@ const s = StyleSheet.create({
     gap: 20,
     zIndex: 99,
   },
+});
+
+const sf = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.paper },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.mist,
+  },
+  title: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 18, color: Colors.inkDark },
+  closeBtn: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.sky },
+  body: { flex: 1, paddingHorizontal: 22, paddingTop: 20 },
+  note: { fontFamily: 'SpaceMono_400Regular', fontSize: 13, lineHeight: 22, color: Colors.ink },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 22,
+    paddingBottom: 36,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.mist,
+  },
+  btn: { flex: 1, paddingVertical: 14, borderRadius: 9999, borderWidth: 1, borderColor: Colors.stone, alignItems: 'center' },
+  btnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: Colors.inkDark },
+  emailBtn: { backgroundColor: Colors.sky, borderColor: Colors.sky },
+  emailBtnText: { color: Colors.surface },
 });
 
 const so = StyleSheet.create({

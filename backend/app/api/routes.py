@@ -102,6 +102,109 @@ def seed_territory(db: Session = Depends(get_db)):
     return {"accounts_upserted": upserted, "contacts_added": contacts_added}
 
 
+@router.get("/admin/list-accounts")
+def list_all_accounts_admin(db: Session = Depends(get_db)):
+    """List every account name + ID to identify duplicates."""
+    accounts = db.query(Account).order_by(Account.name).all()
+    return [{"id": a.id, "name": a.name, "city": a.city, "momentum": a.momentum,
+             "contacts": len(a.contacts), "signals": len(a.signals)} for a in accounts]
+
+
+@router.get("/admin/merge-accounts")
+def merge_accounts(keep_id: int, remove_id: int, db: Session = Depends(get_db)):
+    """Merge remove_id into keep_id — moves all related records then deletes remove_id."""
+    from app.models.domain import Activity, Signal, Task, Opportunity, Milestone, ActivityHistory
+    keep = db.query(Account).filter(Account.id == keep_id).first()
+    remove = db.query(Account).filter(Account.id == remove_id).first()
+    if not keep or not remove:
+        return {"error": "Account not found", "keep_found": bool(keep), "remove_found": bool(remove)}
+
+    moved: dict = {}
+    for Model, label in [
+        (Contact, "contacts"), (Signal, "signals"), (Task, "tasks"),
+        (Activity, "activities"), (Opportunity, "opportunities"),
+        (Milestone, "milestones"), (ActivityHistory, "activity_history"),
+    ]:
+        rows = db.query(Model).filter(Model.account_id == remove_id).all()
+        for r in rows:
+            r.account_id = keep_id
+        moved[label] = len(rows)
+
+    # Merge missing fields from remove → keep
+    for field in ("phone", "fax", "address", "city", "state", "website",
+                  "referral_instructions", "scheduling_instructions",
+                  "referral_email", "referral_contact"):
+        if not getattr(keep, field, None) and getattr(remove, field, None):
+            setattr(keep, field, getattr(remove, field))
+
+    db.delete(remove)
+    db.commit()
+    return {"merged_into": keep.name, "removed": remove.name, "records_moved": moved}
+
+
+@router.get("/voice-journal/{entry_id}/salesforce-prep")
+def salesforce_prep(entry_id: int, db: Session = Depends(get_db)):
+    """Generate a Salesforce-ready activity note from a saved voice journal entry."""
+    import json as _json, anthropic as _ant, os
+    from app.models.domain import VoiceJournalEntry
+    entry = db.query(VoiceJournalEntry).filter(VoiceJournalEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+
+    extraction = {}
+    if entry.ai_extraction_json:
+        try:
+            extraction = _json.loads(entry.ai_extraction_json)
+        except Exception:
+            pass
+
+    accounts  = ", ".join(a.get("name", "") for a in extraction.get("accounts", [])) or "Not specified"
+    contacts  = "\n".join(f"- {c.get('name','')} ({c.get('role','')})".strip(" ()") for c in extraction.get("contacts", [])) or "None listed"
+    activities= "\n".join(f"- {a.get('type','Visit')}: {a.get('account_name','')}" for a in extraction.get("activities", [])) or "Field visit"
+    tasks     = "\n".join(f"- {t.get('title','')}" for t in extraction.get("tasks", [])) or "None"
+    summary   = extraction.get("summary") or entry.transcript or ""
+
+    from datetime import datetime as _dt
+    today = _dt.now().strftime("%B %d, %Y")
+
+    prompt = f"""Format the following field visit data as a clean Salesforce activity log. Use plain text only — no markdown, no asterisks, no bullet symbols other than dashes.
+
+Date: {today}
+Account(s): {accounts}
+People met: {contacts}
+Activities: {activities}
+AI Summary: {summary}
+Next steps / tasks: {tasks}
+
+Write the Salesforce activity log in this exact structure:
+
+ACTIVITY LOG
+Date: [date]
+Account: [account name(s)]
+
+VISIT SUMMARY
+[2-3 sentence plain text summary of what happened]
+
+PEOPLE MET
+[list each person with role]
+
+KEY UPDATES
+[list 3-5 key things that happened or were discussed]
+
+NEXT STEPS
+[list each task or follow-up action]
+
+Keep it professional and concise. Use plain dashes for lists. No markdown formatting."""
+
+    client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=600,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return {"entry_id": entry_id, "salesforce_note": msg.content[0].text.strip()}
+
+
 @router.get("/debug/anthropic")
 def debug_anthropic():
     """No-auth: test Anthropic API key and model connectivity."""
