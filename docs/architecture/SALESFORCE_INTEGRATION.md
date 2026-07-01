@@ -48,11 +48,22 @@ Status: **PREP / not yet built.** Product principle 0: Continuo complements Sale
 - Add `SalesforceToken` (user_id, access_token, refresh_token, instance_url, expiry).
 - Matching: link by SF ID when synced; fall back to fuzzy name match (reuse `account_fuzzy_key`) with a review step when ambiguous.
 
-## Open decisions (need Sarah)
-1. **Which Salesforce org?** Mobia's corporate Salesforce (her employer's) vs. a Continuo-owned dev org for building. Building/testing should start in a **free Salesforce Developer Edition org** (developer.salesforce.com/signup) so we never touch Mobia prod until it works.
-2. **API access permission:** Does Mobia's Salesforce admin allow External Client App connections and API-enabled profiles? Corporate orgs often lock this down. May need admin approval.
-3. **Scope:** read-only first (Phase B) or straight to write-back (Phase C)?
-4. **Object mapping:** should a Continuo "activity" become a Salesforce **Task** or **Event**? (Reps usually log visits as Events, follow-ups as Tasks.)
+## Decisions (locked 2026-07-01)
+1. **Org:** Build/test against a **free Salesforce Developer Edition org** first (developer.salesforce.com/signup). Never touch Mobia prod until it works.
+2. **Scope:** **Read-only sync (Phase B) is the next build.** Write-back (Phase C) deferred.
+3. **Object mapping (Phase C, later):** decide Task vs Event when we get there; reps usually log visits as Events, follow-ups as Tasks.
+
+## Status: Phase B SCAFFOLDED (2026-07-01), inert until credentials added
+- `backend/app/services/crm/{base,salesforce}.py` + `backend/app/api/salesforce_routes.py` deployed.
+- `SalesforceToken` table created. Routes: `/salesforce/connect`, `/callback`, `/status`, `POST /salesforce/sync`.
+- `/status` returns `configured:false` until env vars set.
+
+## To ACTIVATE (manual steps for Sarah)
+1. Sign up: **developer.salesforce.com/signup** (free Dev org, 2 min).
+2. In that org: Setup → **App Manager → New External Client App** (or "New Connected App" if ECA unavailable in Dev edition). Enable OAuth. Callback URL: `https://continuo-production-2d36.up.railway.app/salesforce/callback`. Scopes: `api`, `refresh_token`/`offline_access`.
+3. Copy the **Consumer Key** (client id) and **Consumer Secret**.
+4. Add to Railway: `SALESFORCE_CLIENT_ID`, `SALESFORCE_CLIENT_SECRET`, `SALESFORCE_REDIRECT_URI=https://continuo-production-2d36.up.railway.app/salesforce/callback`. (Leave `SALESFORCE_LOGIN_URL` default for Dev org.)
+5. Visit `/salesforce/connect` in a browser → approve → then `POST /salesforce/sync`.
 
 ## Security notes
 - Least privilege scopes; no full `api` write until Phase C.
