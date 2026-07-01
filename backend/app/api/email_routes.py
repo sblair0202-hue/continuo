@@ -41,6 +41,14 @@ def debug_scan(db: Session = Depends(get_db)):
     except Exception as e:
         result["fetch_ok"] = False
         result["fetch_error"] = traceback.format_exc()
+        return result
+    try:
+        extracted = extract_account_data_from_emails(emails[:3])
+        result["extract_ok"] = True
+        result["extracted_count"] = len(extracted)
+    except Exception as e:
+        result["extract_ok"] = False
+        result["extract_error"] = traceback.format_exc()
     return result
 
 
