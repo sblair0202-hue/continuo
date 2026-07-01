@@ -157,13 +157,66 @@ def fetch_recent_emails(token_row, hours: int = 48, query_override: str | None =
         messages.append({
             "id": msg["id"],
             "from": headers.get("from", ""),
+            "to": headers.get("to", "") + " " + headers.get("cc", ""),
             "subject": headers.get("subject", "(No subject)"),
             "date": headers.get("date", ""),
+            "internal_date": msg.get("internalDate"),  # epoch ms as string
             "snippet": msg.get("snippet", ""),
             "body": body,
         })
 
     return messages
+
+
+def compute_account_health(emails: list[dict], accounts: list, contacts: list) -> dict:
+    """Map each account to (last_interaction_epoch_ms, momentum) based on how recently
+    it appears in the rep's email (by contact email match or account name in the text)."""
+    # contact email -> account_id
+    contact_map = {}
+    for c in contacts:
+        if c.email and c.account_id:
+            contact_map[c.email.lower()] = c.account_id
+
+    # account_id -> significant name key for text matching
+    acct_keys = {a.id: account_fuzzy_key(a.name) for a in accounts}
+
+    latest: dict[int, int] = {}
+    for e in emails:
+        try:
+            ts = int(e.get("internal_date") or 0)
+        except (TypeError, ValueError):
+            ts = 0
+        if not ts:
+            continue
+        parties = (e.get("from", "") + " " + e.get("to", "")).lower()
+        text_key = account_fuzzy_key(e.get("subject", "") + " " + e.get("body", "")[:500])
+
+        matched = set()
+        for addr, acct_id in contact_map.items():
+            if addr and addr in parties:
+                matched.add(acct_id)
+        for acct_id, key in acct_keys.items():
+            if key and len(key) >= 6 and key in text_key:
+                matched.add(acct_id)
+
+        for acct_id in matched:
+            if ts > latest.get(acct_id, 0):
+                latest[acct_id] = ts
+
+    import time as _time
+    now_ms = int(_time.time() * 1000)
+    day_ms = 86400 * 1000
+    result = {}
+    for acct_id, ts in latest.items():
+        days = (now_ms - ts) / day_ms
+        if days <= 21:
+            momentum = "rising"
+        elif days <= 60:
+            momentum = "stable"
+        else:
+            momentum = "declining"
+        result[acct_id] = (ts, momentum)
+    return result
 
 
 def extract_account_data_from_emails(emails: list[dict]) -> list[dict]:

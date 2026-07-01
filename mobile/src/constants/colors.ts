@@ -127,8 +127,8 @@ export function impactColor(level: string): string {
 }
 
 export function momentumBadgeColor(momentum: string): string {
-  if (momentum === 'rising' || momentum === 'increased') return Colors.positive;
-  if (momentum === 'declining' || momentum === 'decreased') return Colors.critical;
+  if (['rising', 'increased', 'strong', 'accelerating'].includes(momentum)) return Colors.positive;
+  if (['declining', 'decreased', 'at_risk'].includes(momentum)) return Colors.critical;
   if (momentum === 'stable') return Colors.primary;
-  return Colors.neutral;
+  return Colors.warning; // unknown → visible amber
 }

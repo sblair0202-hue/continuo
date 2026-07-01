@@ -437,6 +437,25 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
     except Exception:
         db.rollback()
 
+    # Compute account health from email recency → drives the status dots
+    health_updated = 0
+    try:
+        from datetime import datetime as _dt
+        all_accounts = db.query(Account).all()
+        all_contacts = db.query(Contact).all()
+        health = email_service.compute_account_health(emails, all_accounts, all_contacts)
+        for acct in all_accounts:
+            hv = health.get(acct.id)
+            if not hv:
+                continue
+            ts_ms, momentum = hv
+            acct.momentum = momentum
+            acct.last_activity_at = _dt.utcfromtimestamp(ts_ms / 1000)
+            health_updated += 1
+        db.commit()
+    except Exception:
+        db.rollback()
+
     return {
         "accounts_updated": accounts_updated,
         "contacts_added": contacts_added,
@@ -444,4 +463,5 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
         "tasks_added": tasks_added,
         "people_added": people_added,
         "people_to_assign": people_to_assign,
+        "health_updated": health_updated,
     }
