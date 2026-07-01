@@ -52,7 +52,7 @@ _TERRITORY_ACCOUNTS = [
 _DEFAULT_REFERRAL = "OT/PT Eval and treat for Vivistim"
 
 
-@router.post("/admin/seed-territory")
+@router.get("/admin/seed-territory")
 def seed_territory(db: Session = Depends(get_db)):
     """Upsert Sarah's Indiana territory accounts with addresses, phone, fax, and referral info."""
     from sqlalchemy import func as _func
