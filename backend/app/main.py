@@ -17,6 +17,7 @@ from app.api.opportunity_routes import router as opportunity_router
 from app.api.milestone_routes import router as milestone_router
 from app.api.activity_history_routes import router as activity_history_router
 from app.api.intelligence_routes import router as intelligence_router
+from app.api.salesforce_routes import router as salesforce_router
 from app.database import Base, SessionLocal, engine
 from app.services.auth_service import seed_admin
 
@@ -90,6 +91,7 @@ app.include_router(opportunity_router)
 app.include_router(milestone_router)
 app.include_router(activity_history_router)
 app.include_router(intelligence_router)
+app.include_router(salesforce_router)
 
 
 @app.exception_handler(RuntimeError)

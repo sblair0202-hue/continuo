@@ -232,6 +232,21 @@ class EmailToken(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SalesforceToken(Base):
+    __tablename__ = "salesforce_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, unique=True, index=True)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    instance_url = Column(String, nullable=True)  # per-org My Domain base URL
+    token_uri = Column(String, nullable=True)
+    expiry = Column(DateTime, nullable=True)
+    scopes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 
