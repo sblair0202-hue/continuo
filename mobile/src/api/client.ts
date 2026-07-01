@@ -195,6 +195,12 @@ export const api = {
   // Accounts (enhanced)
   updateAccount: (id: number, data: Partial<Account>) =>
     request<Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccount: (id: number) =>
+    request<{ deleted: string }>(`/accounts/${id}`, { method: 'DELETE' }),
+  mergeAccounts: (keepId: number, removeId: number) =>
+    request<{ merged_into: string; removed: string }>(
+      `/admin/merge-accounts?keep_id=${keepId}&remove_id=${removeId}`
+    ),
 
   // Sprint 8: Territory Intelligence
   getAccountSnapshot: (id: number) =>

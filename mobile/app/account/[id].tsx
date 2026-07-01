@@ -102,6 +102,7 @@ export default function AccountScreen() {
   const [editingReferral, setEditingReferral] = useState(false);
   const [contextActions, setContextActions] = useState<ContextAction[] | null>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const [mergePickerAccounts, setMergePickerAccounts] = useState<Account[] | null>(null);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     contacts: true, opportunities: true, milestones: true, tasks: true,
@@ -373,6 +374,54 @@ export default function AccountScreen() {
     setEditingReferral(false);
   }
 
+  function handleDeleteAccount() {
+    setContextActions(null);
+    Alert.alert(
+      'Delete account?',
+      `Delete "${account?.name}"? Its contacts, tasks and notes are kept but unlinked.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try { await api.deleteAccount(accountId); router.back(); } catch {}
+          },
+        },
+      ]
+    );
+  }
+
+  function openMergePicker() {
+    setContextActions(null);
+    api.getAccounts()
+      .then(list => setMergePickerAccounts(list.filter(a => a.id !== accountId)))
+      .catch(() => setMergePickerAccounts([]));
+  }
+
+  function handleMergeInto(target: Account) {
+    setMergePickerAccounts(null);
+    Alert.alert(
+      'Merge accounts?',
+      `Merge "${account?.name}" into "${target.name}"? All contacts, tasks and notes move to "${target.name}" and this account is removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Merge', style: 'destructive',
+          onPress: async () => {
+            try { await api.mergeAccounts(target.id, accountId); router.replace(`/account/${target.id}`); } catch {}
+          },
+        },
+      ]
+    );
+  }
+
+  function openAccountMenu() {
+    setContextActions([
+      { label: 'Merge into another account…', onPress: openMergePicker },
+      { label: 'Delete account', destructive: true, onPress: handleDeleteAccount },
+    ]);
+  }
+
   const momentumColor = momentumBadgeColor(account.momentum);
 
   function loadSnapshot() {
@@ -417,6 +466,9 @@ export default function AccountScreen() {
               {account.city && <Text style={s.accountSub}>{account.city}{account.state ? `, ${account.state}` : ''}</Text>}
             </View>
             <View style={[s.momentumDot, { backgroundColor: momentumColor }]} />
+            <TouchableOpacity style={s.acctMenuBtn} onPress={openAccountMenu} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={s.acctMenuDots}>⋯</Text>
+            </TouchableOpacity>
           </View>
           {(account.is_implant_center || account.is_therapy_site || account.is_evaluation_site) && (
             <Text style={s.clinicalLine}>
@@ -764,6 +816,34 @@ export default function AccountScreen() {
 
       {/* Context menu */}
       {contextActions && <ContextMenu actions={contextActions} onClose={() => setContextActions(null)} />}
+
+      {/* Merge picker */}
+      <Modal
+        visible={mergePickerAccounts !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setMergePickerAccounts(null)}
+      >
+        <View style={s.mergeScreen}>
+          <View style={s.mergeHeader}>
+            <Text style={s.mergeTitle}>Merge into…</Text>
+            <TouchableOpacity onPress={() => setMergePickerAccounts(null)} activeOpacity={0.7}>
+              <Text style={s.mergeCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.mergeSub}>
+            "{account.name}" and everything on it will move into the account you pick.
+          </Text>
+          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+            {(mergePickerAccounts ?? []).map(a => (
+              <TouchableOpacity key={a.id} style={s.mergeRow} onPress={() => handleMergeInto(a)} activeOpacity={0.65}>
+                <Text style={s.mergeRowName}>{a.name}</Text>
+                {a.city ? <Text style={s.mergeRowSub}>{a.city}{a.state ? `, ${a.state}` : ''}</Text> : null}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Convert signal modal (Accept flow) */}
       {convertingSignal && (
@@ -1560,7 +1640,19 @@ const s = StyleSheet.create({
   accountName: { fontSize: 20, fontWeight: '700', color: Colors.text, letterSpacing: -0.3 },
   accountSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
   momentumDot: { width: 10, height: 10, borderRadius: 5, marginTop: 6, flexShrink: 0 },
+  acctMenuBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', marginLeft: 2, marginTop: -2 },
+  acctMenuDots: { fontSize: 22, color: Colors.textSecondary, marginTop: -6 },
   clinicalLine: { fontSize: 12, color: Colors.textSecondary, marginTop: 10 },
+
+  // Merge picker
+  mergeScreen: { flex: 1, backgroundColor: Colors.paper, paddingHorizontal: 22, paddingTop: 24 },
+  mergeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mergeTitle: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 18, color: Colors.inkDark },
+  mergeCancel: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.sky },
+  mergeSub: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13.5, color: Colors.graphite, marginTop: 8, marginBottom: 8, lineHeight: 19 },
+  mergeRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.linen },
+  mergeRowName: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15.5, color: Colors.ink },
+  mergeRowSub: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12.5, color: Colors.graphite, marginTop: 2 },
   nextActionBox: {
     backgroundColor: Colors.surface2, borderRadius: 10, padding: 14, marginBottom: 8,
   },
