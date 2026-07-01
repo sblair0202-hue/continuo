@@ -568,6 +568,38 @@ _MOMENTUM_MAP = {
 }
 
 
+@router.get("/admin/dedup-contacts")
+def dedup_contacts(db: Session = Depends(get_db)):
+    """Merge duplicate contacts (same email, case-insensitive; fallback same name).
+    Keeper = the one with an account_id (lowest id), else lowest id. Fills missing
+    fields from dupes, then deletes them."""
+    from collections import defaultdict
+    contacts = db.query(Contact).all()
+    groups = defaultdict(list)
+    for c in contacts:
+        key = (c.email or "").lower().strip() or ("name:" + (c.name or "").lower().strip())
+        if key:
+            groups[key].append(c)
+
+    removed = 0
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+        # Prefer a keeper that already has an account assigned
+        group.sort(key=lambda c: (c.account_id is None, c.id))
+        keeper = group[0]
+        for dup in group[1:]:
+            if not keeper.account_id and dup.account_id:
+                keeper.account_id = dup.account_id
+            for f in ("role", "discipline", "phone", "relationship_notes", "salesforce_contact_id"):
+                if not getattr(keeper, f, None) and getattr(dup, f, None):
+                    setattr(keeper, f, getattr(dup, f))
+            db.delete(dup)
+            removed += 1
+    db.commit()
+    return {"contacts_removed": removed, "contacts_remaining": db.query(Contact).count()}
+
+
 @router.get("/admin/normalize-momentum")
 def normalize_momentum(db: Session = Depends(get_db)):
     """Strip emoji/formatting from momentum values imported from Notion and map to
