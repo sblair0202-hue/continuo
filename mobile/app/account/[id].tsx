@@ -105,7 +105,7 @@ export default function AccountScreen() {
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     contacts: true, opportunities: true, milestones: true, tasks: true,
-    history: false, legacy: false, referral: false, emails: false,
+    history: false, legacy: false, referral: true, emails: false,
   });
   const toggle = (k: string) => setExpanded(p => ({ ...p, [k]: !p[k] }));
 

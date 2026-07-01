@@ -49,6 +49,27 @@ def debug_scan(db: Session = Depends(get_db)):
     except Exception as e:
         result["extract_ok"] = False
         result["extract_error"] = traceback.format_exc()
+        return result
+    accounts = db.query(Account).all()
+    try:
+        people = email_service.extract_people_from_emails(emails, accounts)
+        result["people_ok"] = True
+        result["people_found"] = len(people)
+        result["people_sample"] = [
+            {"name": p.get("name"), "account": p.get("account_name"),
+             "conf": p.get("account_confidence")}
+            for p in people[:8]
+        ]
+    except Exception:
+        result["people_ok"] = False
+        result["people_error"] = traceback.format_exc()
+    try:
+        tasks = email_service.extract_tasks_from_emails(emails, accounts)
+        result["tasks_ok"] = True
+        result["tasks_found"] = len(tasks)
+    except Exception:
+        result["tasks_ok"] = False
+        result["tasks_error"] = traceback.format_exc()
     return result
 
 
