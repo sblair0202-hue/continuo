@@ -510,9 +510,68 @@ def update_account(account_id: int, payload: dict, db: Session = Depends(get_db)
     return account
 
 
+@router.delete("/accounts/{account_id}")
+def delete_account(account_id: int, db: Session = Depends(get_db)):
+    """Delete an account. Related contacts/tasks/etc are unlinked (account_id set null),
+    not deleted, so nothing is silently lost."""
+    from app.models.domain import Activity, Opportunity, Milestone, ActivityHistory
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    name = account.name
+    for Model in (Contact, Signal, Task, Activity, Opportunity, Milestone, ActivityHistory):
+        for row in db.query(Model).filter(Model.account_id == account_id).all():
+            row.account_id = None
+    db.delete(account)
+    db.commit()
+    return {"deleted": name}
+
+
 @router.get("/contacts")
-def list_contacts(db: Session = Depends(get_db)):
-    return db.query(Contact).all()
+def list_contacts(account_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    q = db.query(Contact)
+    if account_id is not None:
+        q = q.filter(Contact.account_id == account_id)
+    return q.all()
+
+
+@router.patch("/contacts/{contact_id}")
+def update_contact(contact_id: int, payload: dict, db: Session = Depends(get_db)):
+    """Assign/edit a contact — used to resolve 'assign to account' review items."""
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    for field in ("account_id", "name", "role", "discipline", "email", "phone",
+                  "champion_level", "relationship_notes"):
+        if field in payload:
+            setattr(contact, field, payload[field])
+    db.commit()
+    return contact
+
+
+_MOMENTUM_MAP = {
+    "rising": "rising", "increased": "rising", "strong": "rising", "up": "rising",
+    "stable": "stable", "steady": "stable", "flat": "stable",
+    "declining": "declining", "decreased": "declining", "down": "declining",
+    "at risk": "at_risk", "at_risk": "at_risk", "risk": "at_risk",
+}
+
+
+@router.get("/admin/normalize-momentum")
+def normalize_momentum(db: Session = Depends(get_db)):
+    """Strip emoji/formatting from momentum values imported from Notion and map to
+    canonical tokens so the status dots render correctly."""
+    import re as _re
+    changed = 0
+    for a in db.query(Account).all():
+        raw = (a.momentum or "").strip()
+        cleaned = _re.sub(r"[^a-z_ ]", "", raw.lower()).strip()
+        mapped = _MOMENTUM_MAP.get(cleaned, "unknown" if not cleaned else cleaned)
+        if mapped != a.momentum:
+            a.momentum = mapped
+            changed += 1
+    db.commit()
+    return {"accounts_normalized": changed}
 
 
 @router.get("/activities")

@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import anthropic
@@ -9,6 +10,37 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+# Filler words dropped when comparing account names for duplicate matching.
+_FILLER_WORDS = {
+    "the", "a", "of", "and", "health", "system", "center", "centre",
+    "outpatient", "therapy", "rehab", "rehabilitation", "clinic", "hospital",
+    "medical", "inc", "llc", "services", "care", "wellness",
+}
+
+
+def account_fuzzy_key(name: str) -> str:
+    """Normalize an account name to a comparison key: lowercase, strip punctuation,
+    drop filler words, remove spaces. Same key = treat as the same account."""
+    n = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower())
+    tokens = [t for t in n.split() if t and t not in _FILLER_WORDS]
+    return "".join(tokens)
+
+
+def find_matching_account(name: str, accounts: list):
+    """Return an existing Account that is the same place as `name`, or None.
+    Conservative: exact fuzzy-key match only, so distinct cities stay separate
+    (e.g. Franciscan Lafayette vs Crawfordsville) but 'Neuro Hope Rehab' matches
+    'NeuroHope'."""
+    if not name:
+        return None
+    target = account_fuzzy_key(name)
+    if not target:
+        return None
+    for a in accounts:
+        if account_fuzzy_key(a.name) == target:
+            return a
+    return None
 
 REDIRECT_URI = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8000/email/callback")
 
@@ -245,6 +277,64 @@ Rules:
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = message.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    text = text.strip().rstrip("```").strip()
+
+    return json.loads(text) if text else []
+
+
+def extract_people_from_emails(emails: list[dict], accounts: list) -> list[dict]:
+    """Extract people (therapists, coordinators, physicians, schedulers) from emails,
+    with a best-guess of which account they belong to and the evidence for it."""
+    if not emails:
+        return []
+
+    account_names = [a.name for a in accounts]
+    account_str = "\n".join(f"- {n}" for n in account_names[:30]) or "None"
+
+    email_blocks = []
+    for e in emails[:15]:
+        block = f"FROM: {e['from']}\nSUBJECT: {e['subject']}\nSNIPPET: {e.get('snippet','')}"
+        if e.get("body"):
+            block += f"\nBODY EXCERPT: {e['body'][:900]}"
+        email_blocks.append(block)
+    emails_text = "\n\n---\n\n".join(email_blocks)
+
+    prompt = f"""You are analyzing a medical device rep's emails to identify the real PEOPLE they work with at healthcare accounts (therapists/OTs/PTs, care coordinators, schedulers, physicians, admins).
+
+The rep's known accounts:
+{account_str}
+
+Emails:
+{emails_text}
+
+For each real person you find who works at a healthcare organization (NOT the rep herself, NOT automated senders, NOT vendors/newsletters), return:
+{{
+  "name": "full name",
+  "email": "their email or null",
+  "role": "their role/title if known, e.g. 'Occupational Therapist', or null",
+  "account_name": "the EXACT account name from the list above if you are confident, else null",
+  "account_confidence": "high|medium|low",
+  "evidence": "1 short sentence: why you think they belong to that account, quoting context (location, signature, thread topic)"
+}}
+
+Rules:
+- Use the email domain and thread context to infer the account, but if a domain maps to multiple locations (e.g. a health system with several sites) and the specific site is NOT clear, set account_name to null and account_confidence to "low".
+- Prefer null over guessing. It is better to leave account_name null than to assign the wrong site.
+- Return a JSON array. Return [] if no real people found.
+- Return only valid JSON, no explanation."""
+
+    client = anthropic.Anthropic()
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=2500,
         messages=[{"role": "user", "content": prompt}],
     )
 

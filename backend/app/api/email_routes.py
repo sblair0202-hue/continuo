@@ -265,7 +265,7 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
         raise HTTPException(status_code=502, detail=f"Account extraction failed: {e}")
 
     from sqlalchemy import func as _func
-    existing_accounts = {a.name.lower(): a for a in db.query(Account).all()}
+    all_accounts = db.query(Account).all()
 
     _MERGE_FIELDS = ("phone", "fax", "website", "referral_email", "referral_instructions", "scheduling_instructions")
     accounts_updated = 0
@@ -275,14 +275,14 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
         if not data.get("name"):
             continue
 
-        key = data["name"].lower()
-        account = existing_accounts.get(key)
+        # Fuzzy match to an existing account so re-scans don't create duplicates
+        account = email_service.find_matching_account(data["name"], all_accounts)
 
         if not account:
             account = Account(name=data["name"], status="prospect", momentum="unknown")
             db.add(account)
             db.flush()
-            existing_accounts[key] = account
+            all_accounts.append(account)
 
         changed = False
         for field in _MERGE_FIELDS:
@@ -353,9 +353,74 @@ def scan_accounts(user_id: str = Depends(get_current_user), db: Session = Depend
     except Exception:
         db.rollback()
 
+    # Extract people and file them under accounts; surface ambiguous ones for review
+    people_added = 0
+    people_to_assign = 0
+    try:
+        all_accounts = db.query(Account).all()
+        raw_people = email_service.extract_people_from_emails(emails, all_accounts)
+        for p in raw_people:
+            name = (p.get("name") or "").strip()
+            if not name:
+                continue
+            email_addr = (p.get("email") or "").strip() or None
+
+            # Skip if this person already exists (by email, else by name)
+            if email_addr:
+                dup = db.query(Contact).filter(_func.lower(Contact.email) == email_addr.lower()).first()
+            else:
+                dup = db.query(Contact).filter(_func.lower(Contact.name) == name.lower()).first()
+            if dup:
+                continue
+
+            acct = email_service.find_matching_account(p.get("account_name") or "", all_accounts)
+            confident = (p.get("account_confidence") == "high") and acct is not None
+
+            if confident:
+                db.add(Contact(
+                    account_id=acct.id,
+                    name=name,
+                    role=p.get("role"),
+                    email=email_addr,
+                    relationship_notes=p.get("evidence"),
+                ))
+                people_added += 1
+            else:
+                # Unsure which account — save the person unassigned AND raise a review item
+                db.add(Contact(
+                    account_id=None,
+                    name=name,
+                    role=p.get("role"),
+                    email=email_addr,
+                    relationship_notes=p.get("evidence"),
+                ))
+                hint = p.get("account_name")
+                summary = f"{name}" + (f" ({p.get('role')})" if p.get("role") else "")
+                summary += " came up in your email but isn't assigned to an account."
+                if hint:
+                    summary += f" Possible match: {hint}."
+                db.add(Signal(
+                    account_id=acct.id if acct else None,
+                    signal_type="question",
+                    title=f"Assign {name} to an account",
+                    summary=summary,
+                    evidence_text=p.get("evidence"),
+                    confidence_score=0.5,
+                    impact_level="medium",
+                    urgency="low",
+                    suggested_action=f"Confirm which account {name}" + (f" ({email_addr})" if email_addr else "") + " belongs to.",
+                    status="new",
+                ))
+                people_to_assign += 1
+        db.commit()
+    except Exception:
+        db.rollback()
+
     return {
         "accounts_updated": accounts_updated,
         "contacts_added": contacts_added,
         "accounts_found_in_email": len(extracted),
         "tasks_added": tasks_added,
+        "people_added": people_added,
+        "people_to_assign": people_to_assign,
     }
