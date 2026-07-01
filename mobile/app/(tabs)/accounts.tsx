@@ -50,6 +50,7 @@ export default function AccountsScreen() {
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   function fetchAll(isRefresh = false) {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -61,22 +62,39 @@ export default function AccountsScreen() {
 
   useFocusEffect(useCallback(() => { fetchAll(); }, []));
 
+  // Distinct account statuses present, for the filter chips
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    accounts.forEach(a => { if (a.status) set.add(a.status); });
+    return ['all', ...Array.from(set).sort()];
+  }, [accounts]);
+
   const filtered = useMemo(() => {
-    if (!filter) return accounts;
+    let list = accounts;
+
+    // Momentum/route filter (from Today screen deep-links)
     if (filter === 'healthy')
-      return accounts.filter(a => ['rising', 'stable', 'increased', 'strong'].includes(a.momentum));
-    if (filter === 'attention')
-      return accounts.filter(a => ['declining', 'decreased', 'at_risk', 'unknown'].includes(a.momentum));
-    if (filter === 'risks') {
+      list = list.filter(a => ['rising', 'stable', 'increased', 'strong'].includes(a.momentum));
+    else if (filter === 'attention')
+      list = list.filter(a => ['declining', 'decreased', 'at_risk', 'unknown'].includes(a.momentum));
+    else if (filter === 'risks') {
       const ids = new Set(signals.filter(s => s.signal_type === 'risk' && s.status === 'new').map(s => s.account_id));
-      return accounts.filter(a => ids.has(a.id));
-    }
-    if (filter === 'opps') {
+      list = list.filter(a => ids.has(a.id));
+    } else if (filter === 'opps') {
       const ids = new Set(signals.filter(s => s.signal_type === 'opportunity' && s.status === 'new').map(s => s.account_id));
-      return accounts.filter(a => ids.has(a.id));
+      list = list.filter(a => ids.has(a.id));
     }
-    return accounts;
-  }, [accounts, signals, filter]);
+
+    // In-screen status filter
+    if (statusFilter !== 'all') {
+      list = list.filter(a => a.status === statusFilter);
+    }
+
+    // Always alphabetical by name
+    return [...list].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+  }, [accounts, signals, filter, statusFilter]);
 
   return (
     <ScrollView
@@ -105,6 +123,30 @@ export default function AccountsScreen() {
       </View>
 
       <View style={s.divider} />
+
+      {/* Status filter chips */}
+      {statusOptions.length > 2 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.chipRow}
+        >
+          {statusOptions.map(opt => {
+            const active = statusFilter === opt;
+            const label = opt === 'all' ? 'All' : opt.charAt(0).toUpperCase() + opt.slice(1);
+            return (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => setStatusFilter(opt)}
+                activeOpacity={0.7}
+                style={[s.statusChip, active && s.statusChipActive]}
+              >
+                <Text style={[s.statusChipText, active && s.statusChipTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {error && <Text style={s.errorText}>{error}</Text>}
 
@@ -163,6 +205,19 @@ const s = StyleSheet.create({
   referralLink:{ fontFamily: 'HankenGrotesk_500Medium', fontSize: 13, color: C.ink2 },
 
   divider: { height: 1, backgroundColor: C.mist, marginHorizontal: 26 },
+
+  chipRow: { paddingHorizontal: 26, paddingTop: 14, paddingBottom: 2, gap: 8 },
+  statusChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.mist,
+    marginRight: 8,
+  },
+  statusChipActive: { backgroundColor: C.ink, borderColor: C.ink },
+  statusChipText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 13, color: C.ink2 },
+  statusChipTextActive: { color: Colors.paper },
 
   section: { paddingHorizontal: 26, paddingTop: 4 },
 
