@@ -39,7 +39,7 @@ def callback(code: str, state: str | None = None, error: str | None = None, db: 
     if error:
         return HTMLResponse(f"<html><body style='font-family:sans-serif;padding:40px'><h2>Salesforce connection cancelled</h2><p>{error}</p></body></html>")
     try:
-        data = salesforce.exchange_code(code)
+        data = salesforce.exchange_code(code, state)
     except Exception as exc:
         return HTMLResponse(f"<html><body style='font-family:sans-serif;padding:40px'><h2>Could not connect Salesforce</h2><p style='color:#888'>{exc}</p></body></html>", status_code=400)
 

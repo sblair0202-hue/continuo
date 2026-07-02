@@ -7,8 +7,11 @@ Config via env vars (add when the External Client App exists):
   SALESFORCE_REDIRECT_URI   (e.g. https://<railway>/salesforce/callback)
   SALESFORCE_LOGIN_URL      (default https://login.salesforce.com; use My Domain in prod)
 """
+import base64
+import hashlib
 import json
 import os
+import secrets
 from datetime import datetime, timedelta
 
 import requests
@@ -18,6 +21,18 @@ API_VERSION = "v66.0"
 SCOPES = ["api", "refresh_token", "offline_access"]
 
 name = "salesforce"
+
+# PKCE code_verifier store, keyed by OAuth state. External Client Apps require PKCE.
+# In-memory is fine for single-user; the connect→callback window is seconds.
+_PKCE: dict[str, str] = {}
+
+
+def _make_pkce() -> tuple[str, str]:
+    verifier = secrets.token_urlsafe(64)[:96]
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).decode().rstrip("=")
+    return verifier, challenge
 
 
 def _cfg(key: str, default: str = "") -> str:
@@ -33,27 +48,34 @@ def is_configured() -> bool:
 
 
 def get_auth_url(user_id: str = "sarah") -> str:
-    import secrets
     import urllib.parse
     state = f"uid:{user_id}:{secrets.token_urlsafe(16)}"
+    verifier, challenge = _make_pkce()
+    _PKCE[state] = verifier
     params = {
         "response_type": "code",
         "client_id": _cfg("SALESFORCE_CLIENT_ID"),
         "redirect_uri": _cfg("SALESFORCE_REDIRECT_URI"),
         "scope": " ".join(SCOPES),
         "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
     }
     return f"{_login_url()}/services/oauth2/authorize?" + urllib.parse.urlencode(params)
 
 
-def exchange_code(code: str) -> dict:
-    resp = requests.post(f"{_login_url()}/services/oauth2/token", data={
+def exchange_code(code: str, state: str | None = None) -> dict:
+    body = {
         "grant_type": "authorization_code",
         "code": code,
         "client_id": _cfg("SALESFORCE_CLIENT_ID"),
         "client_secret": _cfg("SALESFORCE_CLIENT_SECRET"),
         "redirect_uri": _cfg("SALESFORCE_REDIRECT_URI"),
-    })
+    }
+    verifier = _PKCE.pop(state, None) if state else None
+    if verifier:
+        body["code_verifier"] = verifier
+    resp = requests.post(f"{_login_url()}/services/oauth2/token", data=body)
     if not resp.ok:
         raise ValueError(f"Salesforce token exchange failed: {resp.text}")
     data = resp.json()
