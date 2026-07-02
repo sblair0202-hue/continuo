@@ -41,6 +41,17 @@ try:
 except Exception:
     pass
 
+# Inline migration: add Account.aliases if missing
+try:
+    from sqlalchemy import inspect as _insp2, text as _t2
+    _acct_cols = [c["name"] for c in _insp2(engine).get_columns("accounts")]
+    if "aliases" not in _acct_cols:
+        with engine.connect() as _c2:
+            _c2.execute(_t2("ALTER TABLE accounts ADD COLUMN aliases TEXT"))
+            _c2.commit()
+except Exception:
+    pass
+
 try:
     from sqlalchemy import inspect as _insp2, text as _text2
     _vj_cols = [c["name"] for c in _insp2(engine).get_columns("voice_journal_entries")]

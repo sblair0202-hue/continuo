@@ -28,6 +28,7 @@ class Account(Base):
     fax = Column(String, nullable=True)
     website = Column(String, nullable=True)
     account_type = Column(String, nullable=True)
+    aliases = Column(Text, nullable=True)  # comma-separated "also known as" names for matching
 
     # Referral info
     referral_instructions = Column(Text, nullable=True)

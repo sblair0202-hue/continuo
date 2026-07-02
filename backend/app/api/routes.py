@@ -102,6 +102,52 @@ def seed_territory(db: Session = Depends(get_db)):
     return {"accounts_upserted": upserted, "contacts_added": contacts_added}
 
 
+@router.get("/accounts/match")
+def match_account(name: str, db: Session = Depends(get_db)):
+    """Return candidate existing accounts for a name so the app can ask
+    'we heard X — did you mean [existing] or is this new?'. Ranked best-first."""
+    from app.services.email_service import account_fuzzy_key
+    target = account_fuzzy_key(name)
+    exact = find_account_match(db, name)
+    candidates = []
+    if not exact and target:
+        for a in db.query(Account).all():
+            akey = account_fuzzy_key(a.name)
+            score = 0
+            if akey == target:
+                score = 100
+            elif target and (target in akey or akey in target):
+                score = 70
+            elif a.aliases and any(account_fuzzy_key(al) == target for al in a.aliases.split(",")):
+                score = 100
+            if score:
+                candidates.append((score, a))
+        candidates.sort(key=lambda t: -t[0])
+    return {
+        "query": name,
+        "exact_match": {"id": exact.id, "name": exact.name} if exact else None,
+        "candidates": [{"id": a.id, "name": a.name, "city": a.city, "score": s}
+                       for s, a in candidates[:5]],
+    }
+
+
+@router.post("/accounts/{account_id}/aliases")
+def add_alias(account_id: int, payload: dict, db: Session = Depends(get_db)):
+    """Add an 'also known as' alias to an account so future recaps match it."""
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    alias = (payload.get("alias") or "").strip()
+    if not alias:
+        raise HTTPException(status_code=400, detail="alias is required")
+    existing = [a.strip() for a in (account.aliases or "").split(",") if a.strip()]
+    if alias.lower() not in [e.lower() for e in existing]:
+        existing.append(alias)
+        account.aliases = ", ".join(existing)
+        db.commit()
+    return {"id": account.id, "name": account.name, "aliases": account.aliases}
+
+
 @router.get("/admin/list-accounts")
 def list_all_accounts_admin(db: Session = Depends(get_db)):
     """List every account name + ID to identify duplicates."""
@@ -227,14 +273,38 @@ def debug_anthropic():
     return result
 
 
+def find_account_match(db: Session, name: str):
+    """Find an existing account matching `name` by: exact name, alias, or fuzzy key.
+    Returns the Account or None. Used to prevent recap/scan duplicate accounts."""
+    from sqlalchemy import func
+    from app.services.email_service import account_fuzzy_key
+    if not name or not name.strip():
+        return None
+    n = name.strip()
+    exact = db.query(Account).filter(func.lower(Account.name) == n.lower()).first()
+    if exact:
+        return exact
+    target = account_fuzzy_key(n)
+    if not target:
+        return None
+    for a in db.query(Account).all():
+        if account_fuzzy_key(a.name) == target:
+            return a
+        # check aliases (comma-separated)
+        if a.aliases:
+            for alias in a.aliases.split(","):
+                if account_fuzzy_key(alias) == target:
+                    return a
+    return None
+
+
 def get_or_create_account(
     db: Session,
     name: str,
     city: str | None = None,
     state: str | None = None,
 ) -> Account:
-    from sqlalchemy import func
-    account = db.query(Account).filter(func.lower(Account.name) == name.strip().lower()).first()
+    account = find_account_match(db, name)
     if account:
         return account
 
@@ -501,7 +571,7 @@ def get_account(account_id: int, db: Session = Depends(get_db)):
 _ACCOUNT_EDITABLE = {
     "name", "city", "state", "status", "momentum", "next_action", "priority", "organization",
     # Sprint 7 referral fields
-    "address", "phone", "fax", "website", "account_type",
+    "address", "phone", "fax", "website", "account_type", "aliases",
     "referral_instructions", "scheduling_instructions",
     "referral_contact", "referral_email", "preferred_referral_method", "insurance_notes",
     "is_implant_center", "is_therapy_site", "is_evaluation_site",
