@@ -1,14 +1,18 @@
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import * as ImagePicker from 'expo-image-picker';
+import { useKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
+  Alert,
   Animated,
   Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -120,6 +124,9 @@ export default function VoiceCaptureScreen() {
   const { user } = useAuth();
   const { setOrbState } = useOrb();
 
+  // Keep the screen awake for the whole capture session so sleep never kills transcription
+  useKeepAwake();
+
   const startingMode: CaptureStage = (initialMode === 'type' ? 'type' : initialMode === 'photo' ? 'photo' : 'idle');
   const [stage, setStage] = useState<CaptureStage>(startingMode);
   const [transcript, setTranscript] = useState('');
@@ -132,6 +139,7 @@ export default function VoiceCaptureScreen() {
   const understandingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Refs so stopListening always reads the latest values (avoids stale closure bug)
   const transcriptRef = useRef('');
+  const transcriptScrollRef = useRef<ScrollView>(null);
   const interimTranscriptRef = useRef('');
 
   // Start gentle breathing animation
@@ -151,7 +159,7 @@ export default function VoiceCaptureScreen() {
     if (autoStart === 'true') {
       startListening();
     } else if (initialMode === 'photo') {
-      setTimeout(() => launchPhotoCapture(), 200);
+      setTimeout(() => choosePhotoSource(), 200);
     }
   }, []);
 
@@ -244,7 +252,7 @@ export default function VoiceCaptureScreen() {
 
   function handleOrbPress() {
     if (stage === 'photo') {
-      launchPhotoCapture();
+      choosePhotoSource();
     } else if (stage === 'idle' || stage === 'type') {
       startListening();
     } else if (stage === 'listening') {
@@ -259,28 +267,41 @@ export default function VoiceCaptureScreen() {
     }
     setStage(newMode);
     if (newMode === 'photo') {
-      // Give the UI a beat to switch, then open the picker
-      setTimeout(() => launchPhotoCapture(), 120);
+      // Give the UI a beat to switch, then offer camera vs library
+      setTimeout(() => choosePhotoSource(), 120);
     }
   }
 
-  async function launchPhotoCapture() {
+  function choosePhotoSource() {
+    const opts = ['Take Photo', 'Choose from Library', 'Cancel'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: opts, cancelButtonIndex: 2, title: 'Add a photo' },
+        (i) => { if (i === 0) launchPhotoCapture('camera'); else if (i === 1) launchPhotoCapture('library'); }
+      );
+    } else {
+      Alert.alert('Add a photo', undefined, [
+        { text: 'Take Photo', onPress: () => launchPhotoCapture('camera') },
+        { text: 'Choose from Library', onPress: () => launchPhotoCapture('library') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }
+
+  async function launchPhotoCapture(source: 'camera' | 'library') {
     setError(null);
     try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      // Offer camera if granted, else fall back to library
-      const useCamera = perm.granted;
-      const result = useCamera
-        ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.6, allowsEditing: false })
-        : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.6, mediaTypes: ImagePicker.MediaTypeOptions.Images });
-      if (result.canceled || !result.assets?.[0]?.base64) {
-        return;
+      let result;
+      if (source === 'camera') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { setError('Camera access needed. Allow in Settings.'); return; }
+        result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.6, allowsEditing: false });
+      } else {
+        const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!lib.granted) { setError('Photo access needed. Allow in Settings.'); return; }
+        result = await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.6, mediaTypes: ImagePicker.MediaTypeOptions.Images });
       }
-      if (!useCamera && !lib.granted) {
-        setError('Photo access needed. Allow in Settings.');
-        return;
-      }
+      if (result.canceled || !result.assets?.[0]?.base64) return;
       const asset = result.assets[0];
       const mediaType = asset.mimeType ?? 'image/jpeg';
       setStage('understanding');
@@ -330,13 +351,19 @@ export default function VoiceCaptureScreen() {
           <Text style={s.promptSub}>{prompt.sub}</Text>
         </View>
 
-        {/* Live transcript (listening / understanding) */}
+        {/* Live transcript (listening / understanding) — scrolls, auto-sticks to bottom */}
         {(stage === 'listening' || stage === 'understanding') && displayText ? (
-          <View style={s.transcriptBlock}>
+          <ScrollView
+            style={s.transcriptScroll}
+            contentContainerStyle={s.transcriptBlock}
+            ref={transcriptScrollRef}
+            onContentSizeChange={() => transcriptScrollRef.current?.scrollToEnd({ animated: true })}
+            showsVerticalScrollIndicator={false}
+          >
             <Text style={s.transcriptText}>{displayText}
               {stage === 'listening' ? <Text style={s.caret}> |</Text> : null}
             </Text>
-          </View>
+          </ScrollView>
         ) : null}
 
         {/* Type field */}
@@ -524,10 +551,14 @@ const s = StyleSheet.create({
     color: Colors.graphite,
     textAlign: 'center',
   },
+  transcriptScroll: {
+    maxHeight: 180,
+    alignSelf: 'stretch',
+  },
   transcriptBlock: {
-    maxWidth: 300,
-    maxHeight: 140,
+    maxWidth: 320,
     alignSelf: 'center',
+    paddingHorizontal: 12,
   },
   transcriptText: {
     fontFamily: 'Newsreader_400Regular',

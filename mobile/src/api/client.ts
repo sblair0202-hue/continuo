@@ -134,6 +134,23 @@ export const api = {
     ),
   getCalendarStatus: () => request<{ connected: boolean }>('/calendar/status'),
   getTodayEvents: () => request<CalendarEvent[]>('/calendar/today'),
+  createCalendarEvent: (event: { title: string; start: string; end?: string; location?: string; description?: string; all_day?: boolean }) =>
+    request<{ id: string; title: string; start: string; html_link: string }>('/calendar/events', {
+      method: 'POST', body: JSON.stringify(event), timeoutMs: 20000,
+    }),
+  createEventsFromSchedule: (text: string, date?: string) =>
+    request<{ created: any[]; created_count: number; failed: number; parsed_count: number }>(
+      '/calendar/events-from-schedule',
+      { method: 'POST', body: JSON.stringify({ text, date }), timeoutMs: 45000 }
+    ),
+  matchAccount: (name: string) =>
+    request<{ query: string; exact_match: { id: number; name: string } | null; candidates: { id: number; name: string; city: string | null; score: number }[] }>(
+      `/accounts/match?name=${encodeURIComponent(name)}`
+    ),
+  addAccountAlias: (accountId: number, alias: string) =>
+    request<{ id: number; name: string; aliases: string | null }>(
+      `/accounts/${accountId}/aliases`, { method: 'POST', body: JSON.stringify({ alias }) }
+    ),
   getMeetingPrep: (eventId: string, accountId?: number) =>
     request<MeetingPrep>(
       `/calendar/meeting-prep/${encodeURIComponent(eventId)}${accountId != null ? `?account_id=${accountId}` : ''}`
