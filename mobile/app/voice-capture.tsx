@@ -418,6 +418,13 @@ export default function VoiceCaptureScreen() {
           />
         </View>
       )}
+
+      {/* PHI guidance — subtle, always present */}
+      {stage !== 'understanding' && (
+        <Text style={s.phiNote}>
+          Avoid patient-identifying details unless approved for your organization.
+        </Text>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -626,6 +633,15 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
     paddingVertical: 20,
+  },
+  phiNote: {
+    fontFamily: 'HankenGrotesk_400Regular',
+    fontSize: 11.5,
+    color: Colors.graphite,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 12,
+    lineHeight: 16,
   },
   modeBtn: {
     width: 52,

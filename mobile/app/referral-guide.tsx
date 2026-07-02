@@ -16,6 +16,21 @@ import { api } from '../src/api/client';
 import { Colors } from '../src/constants/colors';
 import type { Account } from '../src/types';
 
+// ── Referral pathway completeness ──────────────────────────────────────────────
+// Scores all pathway fields the spec calls out, not just address/phone.
+const REFERRAL_FIELDS: (keyof Account)[] = [
+  'address', 'phone', 'fax', 'referral_instructions', 'referral_contact',
+  'referral_email', 'scheduling_instructions', 'preferred_referral_method', 'insurance_notes',
+];
+
+function referralCompleteness(a: Account): number {
+  const filled = REFERRAL_FIELDS.filter(f => {
+    const v = a[f];
+    return typeof v === 'string' && v.trim().length > 0;
+  }).length;
+  return Math.round((filled / REFERRAL_FIELDS.length) * 100);
+}
+
 // ── Text generation ───────────────────────────────────────────────────────────
 
 function buildEmailBody(accounts: Account[]): string {
@@ -202,7 +217,8 @@ export default function ReferralGuideScreen() {
         ) : (
           filtered.map(a => {
             const isSelected = selectedIds.has(a.id);
-            const hasReferralInfo = !!(a.address || a.phone || a.referral_instructions);
+            const pct = referralCompleteness(a);
+            const complete = pct === 100;
             return (
               <TouchableOpacity
                 key={a.id}
@@ -219,8 +235,14 @@ export default function ReferralGuideScreen() {
                     {a.is_implant_center && <View style={[styles.typeBadge, { backgroundColor: '#6C5CE720' }]}><Text style={[styles.typeBadgeText, { color: '#6C5CE7' }]}>Implant</Text></View>}
                     {a.is_therapy_site && <View style={[styles.typeBadge, { backgroundColor: '#00B89420' }]}><Text style={[styles.typeBadgeText, { color: '#00B894' }]}>Therapy</Text></View>}
                     {a.is_evaluation_site && <View style={[styles.typeBadge, { backgroundColor: '#0984E320' }]}><Text style={[styles.typeBadgeText, { color: '#0984E3' }]}>Eval</Text></View>}
-                    {!hasReferralInfo && <Text style={styles.missingInfo}>No referral info</Text>}
                   </View>
+                </View>
+                {/* Completeness indicator */}
+                <View style={styles.completeWrap}>
+                  <Text style={[styles.completePct, { color: complete ? Colors.positive : pct >= 50 ? Colors.warning : Colors.textTertiary }]}>
+                    {pct}%
+                  </Text>
+                  <Text style={styles.completeLabel}>{complete ? 'complete' : 'pathway'}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -328,6 +350,9 @@ const styles = StyleSheet.create({
   typeBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   typeBadgeText: { fontSize: 11, fontWeight: '600' },
   missingInfo: { fontSize: 11, color: Colors.textSecondary, fontStyle: 'italic' },
+  completeWrap: { alignItems: 'center', marginLeft: 8, minWidth: 48 },
+  completePct: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15 },
+  completeLabel: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 9.5, color: Colors.textTertiary, letterSpacing: 0.4, textTransform: 'uppercase' },
 
   checkbox: {
     width: 22, height: 22, borderRadius: 11,

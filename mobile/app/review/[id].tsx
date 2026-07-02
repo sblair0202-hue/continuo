@@ -438,6 +438,16 @@ export default function ReviewScreen() {
             <Text style={s.titleSub}>Review and edit before saving.</Text>
           </View>
 
+          {/* PHI warning */}
+          {parsed.possible_phi_warning && (
+            <View style={s.phiWarn}>
+              <Text style={s.phiWarnTitle}>Possible patient-identifiable detail</Text>
+              <Text style={s.phiWarnText}>
+                This capture may contain patient information. Remove or edit anything not approved for your organization before saving.
+              </Text>
+            </View>
+          )}
+
           {/* Summary */}
           <SectionCard eyebrow="SUMMARY">
             <EditableText
@@ -752,6 +762,9 @@ const s = StyleSheet.create({
   sourceChipText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12, color: Colors.graphite },
   discardBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.roseTint },
   discardBtnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: Colors.critical },
+  phiWarn: { backgroundColor: Colors.roseTint, borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: Colors.rose },
+  phiWarnTitle: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13.5, color: Colors.critical, marginBottom: 4 },
+  phiWarnText: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: Colors.ink, lineHeight: 19 },
 
   titleBlock: { paddingTop: 12, paddingBottom: 20 },
   titleText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 30, lineHeight: 34, letterSpacing: -0.6, color: Colors.inkDark },

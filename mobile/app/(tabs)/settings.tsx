@@ -162,25 +162,19 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Security */}
+      {/* Security & Privacy */}
       <View style={s.section}>
         <Text style={s.eyebrow}>Security</Text>
         <View style={s.card}>
-          {biometricAvailable ? (
-            <>
-              <View style={s.switchRow}>
-                <Text style={s.rowLabel}>Biometric unlock</Text>
-                <Switch
-                  value={true}
-                  onValueChange={() =>
-                    Alert.alert('Biometric unlock', 'Manage biometric settings in your device security settings.')
-                  }
-                  trackColor={{ true: C.blue }}
-                />
-              </View>
-              <RowDiv />
-            </>
-          ) : null}
+          <TouchableOpacity
+            style={s.row}
+            activeOpacity={0.7}
+            onPress={() => router.push('/security-privacy')}
+          >
+            <Text style={s.rowLabel}>Security & Privacy</Text>
+            <Text style={s.chev}>›</Text>
+          </TouchableOpacity>
+          <RowDiv />
           <TouchableOpacity
             style={s.row}
             activeOpacity={0.7}
@@ -188,15 +182,6 @@ export default function SettingsScreen() {
           >
             <Text style={s.rowLabel}>Change password</Text>
             <Text style={s.chev}>›</Text>
-          </TouchableOpacity>
-          <RowDiv />
-          <TouchableOpacity
-            style={s.row}
-            activeOpacity={0.7}
-            onPress={() => Alert.alert('MFA', 'Two-factor authentication is coming in a future update.')}
-          >
-            <Text style={s.rowLabel}>Two-factor authentication</Text>
-            <View style={s.comingSoonBadge}><Text style={s.comingSoonText}>Soon</Text></View>
           </TouchableOpacity>
         </View>
       </View>

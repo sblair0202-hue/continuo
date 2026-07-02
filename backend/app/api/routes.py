@@ -251,6 +251,39 @@ Keep it professional and concise. Use plain dashes for lists. No markdown format
     return {"entry_id": entry_id, "salesforce_note": msg.content[0].text.strip()}
 
 
+@router.get("/me/export")
+def export_my_data(user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return the user's data as JSON for transparency/portability (read-only)."""
+    accounts = db.query(Account).all()
+    contacts = db.query(Contact).all()
+    tasks = db.query(Task).all()
+    signals = db.query(Signal).all()
+    def acct(a): return {"id": a.id, "name": a.name, "city": a.city, "state": a.state,
+                          "phone": a.phone, "fax": a.fax, "address": a.address,
+                          "referral_instructions": a.referral_instructions, "aliases": a.aliases}
+    return {
+        "exported_for": user_id,
+        "accounts": [acct(a) for a in accounts],
+        "contacts": [{"id": c.id, "name": c.name, "role": c.role, "email": c.email, "phone": c.phone, "account_id": c.account_id} for c in contacts],
+        "tasks": [{"id": t.id, "title": t.title, "status": t.status, "priority": t.priority, "account_id": t.account_id} for t in tasks],
+        "notes": [{"id": s.id, "title": s.title, "summary": s.summary, "account_id": s.account_id} for s in signals],
+    }
+
+
+@router.post("/integrations/{provider}/disconnect")
+def disconnect_integration(provider: str, user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Disconnect an integration by removing its stored token. provider: calendar|email|salesforce."""
+    from app.models.domain import CalendarToken, EmailToken, SalesforceToken
+    model = {"calendar": CalendarToken, "email": EmailToken, "salesforce": SalesforceToken}.get(provider)
+    if not model:
+        raise HTTPException(status_code=400, detail="Unknown integration")
+    removed = 0
+    for row in db.query(model).all():
+        db.delete(row); removed += 1
+    db.commit()
+    return {"provider": provider, "disconnected": removed > 0}
+
+
 @router.get("/debug/anthropic")
 def debug_anthropic():
     """No-auth: test Anthropic API key and model connectivity."""

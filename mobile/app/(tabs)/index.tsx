@@ -323,7 +323,7 @@ export default function TodayScreen() {
               <Text style={s.calPromptLink}>Go to Settings →</Text>
             </TouchableOpacity>
           ) : meetings.length === 0 ? (
-            <Text style={s.emptyText}>No meetings today.</Text>
+            <Text style={s.emptyText}>Nothing on the calendar today. A good day to reach out or capture notes from a recent visit.</Text>
           ) : (
             <View>
               {pastEvents.map((e, i) => (
@@ -356,7 +356,7 @@ export default function TodayScreen() {
             {visibleTasks.length > 0 && <Text style={s.countBadge}>{visibleTasks.length}</Text>}
           </View>
           {displayTasks.length === 0 ? (
-            <Text style={s.emptyText}>All caught up.</Text>
+            <Text style={s.emptyText}>You're all caught up. Take a moment to review your top accounts or capture notes from your last visit.</Text>
           ) : (
             displayTasks.map(task => (
               <TaskRow
@@ -376,7 +376,7 @@ export default function TodayScreen() {
         <View style={s.section}>
           <Text style={s.eyebrow}>Needs attention</Text>
           {visibleSignals.length === 0 ? (
-            <Text style={s.emptyText}>No new signals.</Text>
+            <Text style={s.emptyText}>Nothing needs your attention right now. Continuo will surface follow-ups from your emails and captures here.</Text>
           ) : (
             visibleSignals.map(sig => (
               <SigRow
@@ -593,7 +593,7 @@ const s = StyleSheet.create({
   eyebrow:     { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.eyebrow, letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 20 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginBottom: 4 },
   countBadge:  { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: C.muted },
-  emptyText:   { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.ink3, paddingBottom: 6 },
+  emptyText:   { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.ink2, paddingBottom: 6, lineHeight: 21 },
   linkText:    { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: C.blue, paddingBottom: 6 },
   calPrompt:   { backgroundColor: Colors.linen, borderRadius: 10, padding: 16, marginBottom: 6 },
   calPromptTitle:{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: C.ink, marginBottom: 4 },

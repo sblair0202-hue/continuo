@@ -151,6 +151,10 @@ export const api = {
     request<{ id: number; name: string; aliases: string | null }>(
       `/accounts/${accountId}/aliases`, { method: 'POST', body: JSON.stringify({ alias }) }
     ),
+  getSalesforceStatus: () => request<{ connected: boolean; configured: boolean }>('/salesforce/status'),
+  exportMyData: () => request<Record<string, any>>('/me/export', { timeoutMs: 30000 }),
+  disconnectIntegration: (provider: 'calendar' | 'email' | 'salesforce') =>
+    request<{ provider: string; disconnected: boolean }>(`/integrations/${provider}/disconnect`, { method: 'POST' }),
   getMeetingPrep: (eventId: string, accountId?: number) =>
     request<MeetingPrep>(
       `/calendar/meeting-prep/${encodeURIComponent(eventId)}${accountId != null ? `?account_id=${accountId}` : ''}`
