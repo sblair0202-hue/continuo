@@ -13,6 +13,7 @@ from app.schemas.voice_journal import (
     VoiceJournalResponse,
 )
 from app.services.field_intelligence_engine import extract_field_intelligence, extract_text_from_image
+from app.services.auth_service import get_current_user
 
 router = APIRouter()
 
