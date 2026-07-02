@@ -14,6 +14,7 @@ import {
 
 import { api } from '../../src/api/client';
 import { Colors, sp } from '../../src/constants/colors';
+import { SignalRing } from '../../src/components/SignalRing';
 import type { SearchResults } from '../../src/types';
 
 type Mode = 'search' | 'ask';
@@ -218,8 +219,8 @@ export default function SearchScreen() {
 
             {asking && (
               <View style={s.thinkingRow}>
-                <ActivityIndicator size="small" color={Colors.textTertiary} />
-                <Text style={s.thinkingText}>Thinking…</Text>
+                <SignalRing size={22} color={Colors.sky} />
+                <Text style={s.thinkingText}>Understanding…</Text>
               </View>
             )}
           </ScrollView>
