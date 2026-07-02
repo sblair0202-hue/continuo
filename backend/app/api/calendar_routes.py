@@ -136,6 +136,89 @@ def today_events(user_id: str = Depends(get_current_user), db: Session = Depends
     return enriched
 
 
+def _get_cal_token(db: Session, user_id: str):
+    token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()
+    if not token:
+        legacy = db.query(CalendarToken).filter(CalendarToken.user_id == "sarah").first()
+        if legacy:
+            legacy.user_id = user_id
+            db.commit()
+            token = legacy
+    return token
+
+
+@router.post("/events")
+def create_calendar_event(payload: dict, user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a single calendar event. Body: {title, start, end?, location?, description?, all_day?}."""
+    token = _get_cal_token(db, user_id)
+    if not token:
+        raise HTTPException(status_code=401, detail="Calendar not connected. Open Settings to connect Google Calendar.")
+    if not payload.get("title") or not payload.get("start"):
+        raise HTTPException(status_code=400, detail="title and start are required")
+    try:
+        created = calendar_service.create_event(token, payload)
+        db.add(token); db.commit()
+        return created
+    except Exception as e:
+        msg = str(e)
+        if "insufficient" in msg.lower() or "scope" in msg.lower() or "403" in msg:
+            raise HTTPException(status_code=403, detail="Calendar needs write access. Please reconnect Google Calendar in Settings.")
+        raise HTTPException(status_code=502, detail=f"Could not create event: {e}")
+
+
+@router.post("/events-from-schedule")
+def events_from_schedule(payload: dict, user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Parse a schedule (from OCR'd photo text or pasted text) into calendar events and create them.
+    Body: {text, date?} where date is the schedule's day (YYYY-MM-DD) if not in the text."""
+    import json as _json, os, anthropic as _ant
+    from datetime import datetime as _dt
+    token = _get_cal_token(db, user_id)
+    if not token:
+        raise HTTPException(status_code=401, detail="Calendar not connected.")
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    schedule_date = payload.get("date") or _dt.now().strftime("%Y-%m-%d")
+
+    prompt = f"""Extract calendar appointments from this schedule text. The schedule is for {schedule_date} unless dates appear in the text.
+
+Schedule:
+{text}
+
+Return a JSON array of events. Each event:
+{{
+  "title": "short title (patient initials or appt type; do NOT include full patient names for privacy)",
+  "start": "ISO 8601 datetime like 2026-07-02T09:00:00",
+  "end": "ISO 8601 datetime or null",
+  "location": "location or null"
+}}
+Rules: infer times from the schedule. If only a time is given, use the schedule date. Use 24h reasoning but output ISO. Return [] if none. Return only valid JSON."""
+
+    try:
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        msg = client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=2000,
+                                      messages=[{"role": "user", "content": prompt}])
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"): raw = raw[4:]
+        raw = raw.strip().rstrip("`").strip()
+        parsed = _json.loads(raw) if raw else []
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not parse schedule: {e}")
+
+    created, failed = [], 0
+    for ev in parsed:
+        if not ev.get("title") or not ev.get("start"):
+            continue
+        try:
+            created.append(calendar_service.create_event(token, ev))
+        except Exception:
+            failed += 1
+    db.add(token); db.commit()
+    return {"created": created, "created_count": len(created), "failed": failed, "parsed_count": len(parsed)}
+
+
 @router.get("/meeting-prep/{event_id}")
 def meeting_prep(event_id: str, account_id: int | None = None, user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
     token = db.query(CalendarToken).filter(CalendarToken.user_id == user_id).first()

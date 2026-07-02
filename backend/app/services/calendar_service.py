@@ -6,7 +6,7 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 
 CLIENT_CONFIG = {
     "web": {
@@ -88,6 +88,52 @@ def refresh_if_needed(token_row) -> Credentials:
         token_row.access_token = creds.token
         token_row.expiry = creds.expiry.replace(tzinfo=None) if creds.expiry else None
     return creds
+
+
+def create_event(token_row, event: dict) -> dict:
+    """Create a Google Calendar event. `event` accepts:
+      title (required), start (ISO8601 or date), end (optional), location,
+      description, all_day (bool)."""
+    creds = refresh_if_needed(token_row)
+    service = build("calendar", "v3", credentials=creds)
+
+    start = event.get("start")
+    end = event.get("end")
+    all_day = event.get("all_day", False)
+
+    if all_day:
+        body_start = {"date": start}
+        body_end = {"date": end or start}
+    else:
+        # default 1-hour duration if no end given
+        body_start = {"dateTime": start}
+        if end:
+            body_end = {"dateTime": end}
+        else:
+            from datetime import datetime as _dt, timedelta as _td
+            try:
+                s = _dt.fromisoformat(start.replace("Z", "+00:00"))
+                body_end = {"dateTime": (s + _td(hours=1)).isoformat()}
+            except Exception:
+                body_end = {"dateTime": start}
+
+    body = {
+        "summary": event.get("title", "(No title)"),
+        "start": body_start,
+        "end": body_end,
+    }
+    if event.get("location"):
+        body["location"] = event["location"]
+    if event.get("description"):
+        body["description"] = event["description"]
+
+    created = service.events().insert(calendarId="primary", body=body).execute()
+    return {
+        "id": created["id"],
+        "title": created.get("summary"),
+        "start": created.get("start", {}).get("dateTime") or created.get("start", {}).get("date"),
+        "html_link": created.get("htmlLink"),
+    }
 
 
 def fetch_today_events(token_row) -> list[dict]:

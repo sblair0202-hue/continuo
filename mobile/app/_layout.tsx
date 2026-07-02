@@ -66,6 +66,7 @@ function RootNavigator() {
       <Stack.Screen name="new-recap" options={{ title: 'New Recap', presentation: 'modal' }} />
       <Stack.Screen name="voice-capture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="review/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="task/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="account/[id]" options={{ title: 'Account', headerBackTitle: 'Back' }} />
       <Stack.Screen name="meeting/[id]" options={{ title: 'Meeting Prep' }} />
       <Stack.Screen name="referral-guide" options={{ title: 'Referral Guide', presentation: 'modal' }} />
