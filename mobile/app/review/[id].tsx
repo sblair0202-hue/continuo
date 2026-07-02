@@ -203,6 +203,26 @@ export default function ReviewScreen() {
   const [accounts, setAccounts] = useState<{ name: string; kept: boolean }[]>(() =>
     deriveAccounts(parsed).map(name => ({ name, kept: true }))
   );
+  // Per-account-name match candidates for "did you mean?" disambiguation
+  const [matches, setMatches] = useState<Record<string, { id: number; name: string }[]>>({});
+  const [dismissedMatch, setDismissedMatch] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    // For each extracted account, ask the backend if it looks like an existing one
+    accounts.forEach(a => {
+      const key = a.name.trim();
+      if (!key || matches[key] !== undefined) return;
+      api.matchAccount(key)
+        .then(r => {
+          const cands: { id: number; name: string }[] = [];
+          if (r.exact_match) return; // exact match — no prompt needed, save will link it
+          r.candidates.forEach(c => cands.push({ id: c.id, name: c.name }));
+          if (cands.length) setMatches(prev => ({ ...prev, [key]: cands }));
+          else setMatches(prev => ({ ...prev, [key]: [] }));
+        })
+        .catch(() => setMatches(prev => ({ ...prev, [key]: [] })));
+    });
+  }, [accounts]);
   const [people, setPeople] = useState<{ name: string; role: string; account_name: string; kept: boolean }[]>(() =>
     (parsed.contacts ?? []).map(c => ({ name: c.name, role: c.role ?? '', account_name: c.account_name ?? '', kept: true }))
   );
@@ -404,11 +424,14 @@ export default function ReviewScreen() {
           {/* Accounts */}
           {accounts.some(a => a.kept) && (
             <SectionCard eyebrow="ACCOUNTS">
-              {accounts.map((a, i) => (
+              {accounts.map((a, i) => {
+                const cands = matches[a.name.trim()];
+                const showPrompt = cands && cands.length > 0 && !dismissedMatch[a.name.trim()];
+                return (
                 <RemovableRow key={i} kept={a.kept} onRemove={() => setAccounts(prev => prev.map((x, j) => j === i ? { ...x, kept: false } : x))}>
                   <View style={s.accountRow}>
                     <View style={s.accountTile}>
-                      <Text style={s.accountTileIcon}>🏥</Text>
+                      <View style={s.accountDot} />
                     </View>
                     <EditableText
                       value={a.name}
@@ -416,8 +439,35 @@ export default function ReviewScreen() {
                       style={s.accountName}
                     />
                   </View>
+                  {showPrompt && (
+                    <View style={s.matchPrompt}>
+                      <Text style={s.matchPromptText}>We heard "{a.name.trim()}" — did you mean:</Text>
+                      {cands.map(c => (
+                        <TouchableOpacity
+                          key={c.id}
+                          style={s.matchOption}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            // Use existing account: set name to the exact existing name so save links it
+                            setAccounts(prev => prev.map((x, j) => j === i ? { ...x, name: c.name } : x));
+                            setDismissedMatch(prev => ({ ...prev, [a.name.trim()]: true, [c.name.trim()]: true }));
+                          }}
+                        >
+                          <Text style={s.matchOptionText}>Use {c.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity
+                        style={s.matchDismiss}
+                        activeOpacity={0.7}
+                        onPress={() => setDismissedMatch(prev => ({ ...prev, [a.name.trim()]: true }))}
+                      >
+                        <Text style={s.matchDismissText}>No, this is a new account</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </RemovableRow>
-              ))}
+                );
+              })}
             </SectionCard>
           )}
 
@@ -764,7 +814,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   accountTileIcon: { fontSize: 14 },
+  accountDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.sky },
   accountName: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, flex: 1 },
+  matchPrompt: { marginTop: 8, marginLeft: 40, backgroundColor: Colors.clayTint, borderRadius: 10, padding: 10 },
+  matchPromptText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 12.5, color: Colors.inkDark, marginBottom: 6 },
+  matchOption: { paddingVertical: 7, paddingHorizontal: 10, backgroundColor: Colors.surface, borderRadius: 8, marginBottom: 5, borderWidth: 1, borderColor: Colors.clay },
+  matchOptionText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13.5, color: Colors.ink },
+  matchDismiss: { paddingVertical: 5 },
+  matchDismissText: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 12.5, color: Colors.graphite },
 
   // People
   personRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },

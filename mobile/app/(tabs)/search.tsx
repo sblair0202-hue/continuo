@@ -28,8 +28,9 @@ export default function SearchScreen() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [askQuery, setAskQuery] = useState('');
-  const [answer, setAnswer] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [chat, setChat] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+  const chatScrollRef = useRef<ScrollView>(null);
 
   function handleSearch(text: string) {
     setQuery(text);
@@ -43,13 +44,19 @@ export default function SearchScreen() {
   }
 
   function handleAsk() {
-    if (!askQuery.trim() || asking) return;
+    const q = askQuery.trim();
+    if (!q || asking) return;
+    setChat(prev => [...prev, { role: 'user', text: q }]);
+    setAskQuery('');            // clear the input immediately
     setAsking(true);
-    setAnswer(null);
-    api.ask(askQuery.trim())
-      .then(r => setAnswer(r.answer))
-      .catch(() => setAnswer('Unable to reach server — check your connection.'))
-      .finally(() => setAsking(false));
+    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+    api.ask(q)
+      .then(r => setChat(prev => [...prev, { role: 'assistant', text: r.answer }]))
+      .catch(() => setChat(prev => [...prev, { role: 'assistant', text: 'Unable to reach server — check your connection.' }]))
+      .finally(() => {
+        setAsking(false);
+        setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+      });
   }
 
   const totalResults = results
@@ -186,23 +193,34 @@ export default function SearchScreen() {
             <Text style={s.askHeaderSub}>Ask about accounts, contacts, tasks, signals, or opportunities.</Text>
           </View>
 
-          <ScrollView contentContainerStyle={s.askScroll} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            ref={chatScrollRef}
+            contentContainerStyle={s.askScroll}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
+          >
+            {chat.length === 0 && !asking && (
+              <Text style={s.askPlaceholder}>Ask a question below to get started.</Text>
+            )}
+
+            {chat.map((m, i) => (
+              m.role === 'user' ? (
+                <View key={i} style={s.userBubble}>
+                  <Text style={s.userBubbleText}>{m.text}</Text>
+                </View>
+              ) : (
+                <View key={i} style={s.answerBlock}>
+                  <Text style={s.answerMeta}>Continuo</Text>
+                  <Text style={s.answerText}>{m.text}</Text>
+                </View>
+              )
+            ))}
+
             {asking && (
               <View style={s.thinkingRow}>
                 <ActivityIndicator size="small" color={Colors.textTertiary} />
                 <Text style={s.thinkingText}>Thinking…</Text>
               </View>
-            )}
-
-            {answer && !asking && (
-              <View style={s.answerBlock}>
-                <Text style={s.answerMeta}>Continuo</Text>
-                <Text style={s.answerText}>{answer}</Text>
-              </View>
-            )}
-
-            {!answer && !asking && (
-              <Text style={s.askPlaceholder}>Ask a question below to get started.</Text>
             )}
           </ScrollView>
 
@@ -224,7 +242,7 @@ export default function SearchScreen() {
               disabled={!askQuery.trim() || asking}
               activeOpacity={0.7}
             >
-              <Text style={s.sendBtnText}>Ask</Text>
+              <Text style={s.sendBtnText}>Send</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -300,6 +318,11 @@ const s = StyleSheet.create({
     letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: sp.sm,
   },
   answerText: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 15, color: Colors.ink, lineHeight: 24 },
+  userBubble: {
+    alignSelf: 'flex-end', backgroundColor: Colors.sky, borderRadius: 16, borderBottomRightRadius: 4,
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: sp.md, maxWidth: '82%',
+  },
+  userBubbleText: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 15, color: Colors.surface, lineHeight: 22 },
   askPlaceholder: { fontFamily: 'HankenGrotesk_400Regular', fontSize: 14, color: Colors.stone, textAlign: 'center', marginTop: 60 },
   askInputRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: sp.sm,
