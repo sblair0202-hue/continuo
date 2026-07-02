@@ -252,6 +252,34 @@ export default function ReviewScreen() {
   const [sfLoading, setSfLoading]       = useState(false);
   const [sfModalVisible, setSfModal]    = useState(false);
   const [sfCopied, setSfCopied]         = useState(false);
+  const [calLoading, setCalLoading]     = useState(false);
+
+  async function handleAddToCalendar() {
+    setCalLoading(true);
+    try {
+      // Parse any appointments out of the recap summary + notes and create them
+      const text = [summary, ...(parsed.tasks ?? []).map(t => t.title)].filter(Boolean).join('. ');
+      const res = await api.createEventsFromSchedule(text);
+      if (res.created_count > 0) {
+        Alert.alert('Added to Calendar', `Created ${res.created_count} event${res.created_count !== 1 ? 's' : ''}.`);
+      } else {
+        Alert.alert('No appointments found', 'Couldn\'t find any dates/times to add. Try a recap that mentions a day and time.');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg.toLowerCase().includes('reconnect') || msg.includes('403') || msg.toLowerCase().includes('write access')) {
+        Alert.alert(
+          'Reconnect Calendar',
+          'Continuo needs calendar write access to add events. Open Settings and reconnect Google Calendar.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Could not add', 'Something went wrong adding to your calendar. Try again.');
+      }
+    } finally {
+      setCalLoading(false);
+    }
+  }
 
   async function handleSfPrep() {
     setSfLoading(true);
@@ -612,17 +640,16 @@ export default function ReviewScreen() {
         <View style={[s.actionBar, { paddingBottom: insets.bottom + 14 }]}>
           {saveError ? <Text style={s.saveError}>{saveError}</Text> : null}
 
-          {/* Salesforce prep row */}
-          <TouchableOpacity
-            style={s.sfRow}
-            onPress={handleSfPrep}
-            disabled={sfLoading}
-            activeOpacity={0.72}
-          >
-            <Text style={s.sfRowText}>
-              {sfLoading ? 'Generating…' : 'Prepare Salesforce Update'}
-            </Text>
-          </TouchableOpacity>
+          {/* Secondary actions */}
+          <View style={s.secondaryRow}>
+            <TouchableOpacity onPress={handleSfPrep} disabled={sfLoading} activeOpacity={0.72}>
+              <Text style={s.sfRowText}>{sfLoading ? 'Generating…' : 'Prepare Salesforce Update'}</Text>
+            </TouchableOpacity>
+            <Text style={s.secondaryDot}>·</Text>
+            <TouchableOpacity onPress={handleAddToCalendar} disabled={calLoading} activeOpacity={0.72}>
+              <Text style={s.sfRowText}>{calLoading ? 'Checking…' : 'Add to Calendar'}</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={s.actionBtns}>
             <TouchableOpacity
@@ -923,12 +950,21 @@ const s = StyleSheet.create({
   saveBtnText: { fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: Colors.surface },
   btnDisabled: { opacity: 0.6 },
 
-  // Salesforce row
+  // Salesforce / secondary actions row
   sfRow: {
     alignItems: 'center',
     paddingVertical: 9,
     marginBottom: 6,
   },
+  secondaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 9,
+    marginBottom: 6,
+  },
+  secondaryDot: { fontFamily: 'HankenGrotesk_500Medium', fontSize: 14, color: Colors.stone },
   sfRowText: {
     fontFamily: 'HankenGrotesk_500Medium',
     fontSize: 13.5,

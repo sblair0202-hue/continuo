@@ -134,6 +134,7 @@ export default function SettingsScreen() {
             onConnect={() => Linking.openURL(`${API_BASE_URL}/calendar/connect?user_id=${encodeURIComponent(user?.user_id ?? '')}`).catch(() =>
               Alert.alert('Error', 'Could not open browser. Try again.')
             )}
+            hint={calConnected ? 'Tap to reconnect if adding events isn’t working' : undefined}
           />
           <RowDiv />
           <IntegrationRow
@@ -301,12 +302,14 @@ function IntegrationRow({
   statusColor,
   onConnect,
   scanButton,
+  hint,
 }: {
   label: string;
   statusLabel: string;
   statusColor: string;
   onConnect?: () => void;
   scanButton?: { scanning: boolean; onScan: () => void };
+  hint?: string;
 }) {
   return (
     <View>
@@ -319,11 +322,12 @@ function IntegrationRow({
         <Text style={s.rowLabel}>{label}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text style={[s.rowValue, { color: statusColor }]}>{statusLabel}</Text>
-          {onConnect && statusLabel !== 'Connected' && statusLabel !== 'Coming soon' && (
+          {onConnect && statusLabel !== 'Coming soon' && (
             <Text style={s.chev}>›</Text>
           )}
         </View>
       </TouchableOpacity>
+      {hint ? <Text style={s.scanLabel}>{hint}</Text> : null}
       {scanButton && (
         <View style={s.scanRow}>
           <Text style={s.scanLabel}>Scan for accounts, contacts, and referral info</Text>
