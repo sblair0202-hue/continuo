@@ -5,77 +5,79 @@ import type { SignalType } from '../types';
 // canonical OKLCH tokens. Update hex when OKLCH support lands in RN.
 
 export const Colors = {
-  // Warm neutrals
-  paper:    '#F9F8F4',   // oklch(0.975 0.006 75) — page background
-  surface:  '#FFFFFF',   // cards / elevated surfaces
-  linen:    '#EFEAE3',   // oklch(0.94 0.008 75)  — tab bars, subtle fills
-  stone:    '#C7C2BB',   // oklch(0.78 0.01 70)   — disabled / hairlines
-  mist:     '#E5E1DA',   // oklch(0.91 0.006 75)  — borders / dividers
-  graphite: '#8D8580',   // oklch(0.56 0.014 60)  — secondary text
-  ink:      '#5A5048',   // oklch(0.37 0.014 55)  — primary text, ring
-  inkDark:  '#4F4540',   // oklch(0.33 0.012 55)  — dark surfaces
-  reversed: '#F7F4EF',   // oklch(0.97 0.006 80)  — text on dark
+  // ─── BRAND REFRESH (2026-07 concept board) ─────────────────────────────────
+  // Softened blue-charcoal + warm ivory per Continuo Brand Spec. Warm neutrals
+  // retained where they read well; ink shifted from warm-brown to blue-charcoal.
+  paper:    '#FAF9F6',   // Ivory — warm off-white page background
+  surface:  '#FFFFFF',   // cards / elevated surfaces (warm white)
+  linen:    '#EEEDE8',   // tab bars, subtle fills
+  stone:    '#C9C7C1',   // disabled / hairlines (cooler stone)
+  mist:     '#E5E4DF',   // borders / dividers (warm light gray)
+  graphite: '#7C7A76',   // secondary text — warm taupe-gray
+  ink:      '#2F3C4A',   // Blue Charcoal — primary text, ring
+  inkDark:  '#293643',   // darker blue-charcoal — dark surfaces
+  reversed: '#F7F6F2',   // text on dark
 
-  // Soft accents
-  sky:  '#7A9FC2',   // oklch(0.73 0.055 235) — primary / active / "now"
-  sage: '#84B296',   // oklch(0.76 0.05 155)  — positive / done
-  clay: '#C8A67A',   // oklch(0.81 0.06 70)   — pending / attention
-  rose: '#C07E78',   // oklch(0.74 0.065 18)  — critical / error
-  teal: '#79A8B9',   // oklch(0.74 0.055 200) — trail mid-bead only
+  // Soft accents — muted, less saturated than before
+  sky:  '#789BBB',   // Dusty Blue — primary / active / "now"
+  sage: '#A6C0AE',   // muted sage — positive / done
+  clay: '#D8B98A',   // muted gold/tan — pending / attention (status dots)
+  rose: '#D08A84',   // soft error/critical
+  teal: '#8FB0BE',   // Sky Mist-ish — trail mid-bead only
 
-  // Tinted backgrounds for accents (surface + 8% tint)
-  skyTint:  '#EEF3F9',
-  sageTint: '#EDF5F0',
-  clayTint: '#F7F1E8',
-  roseTint: '#F7EEEE',
+  // Tinted backgrounds for accents (surface + soft tint)
+  skyTint:  '#EDF2F7',
+  sageTint: '#EEF4EF',
+  clayTint: '#F7F1E7',
+  roseTint: '#F8EFEE',
 
   // Semantic aliases (use these in UI code — meaning over value)
-  background:    '#F9F8F4',  // = paper
-  textPrimary:   '#5A5048',  // = ink
-  textSecondary: '#8D8580',  // = graphite
-  textTertiary:  '#C7C2BB',  // = stone
-  border:        '#E5E1DA',  // = mist
-  borderSubtle:  '#EFEAE3',  // = linen
-  positive:      '#84B296',  // = sage
-  warning:       '#C8A67A',  // = clay
-  critical:      '#C07E78',  // = rose
-  primary:       '#7A9FC2',  // = sky
-  primaryLight:  '#EEF3F9',  // = skyTint
+  background:    '#FAF9F6',  // = paper
+  textPrimary:   '#2F3C4A',  // = ink
+  textSecondary: '#7C7A76',  // = graphite
+  textTertiary:  '#C9C7C1',  // = stone
+  border:        '#E5E4DF',  // = mist
+  borderSubtle:  '#EEEDE8',  // = linen
+  positive:      '#A6C0AE',  // = sage
+  warning:       '#D8B98A',  // = clay
+  critical:      '#D08A84',  // = rose
+  primary:       '#789BBB',  // = sky
+  primaryLight:  '#EDF2F7',  // = skyTint
 
   // Legacy aliases — keep so existing screens don't break
-  text:       '#5A5048',
-  surface2:   '#EFEAE3',
-  surface3:   '#E5E1DA',
-  neutral:    '#8D8580',
-  high:       '#C07E78',
-  medium:     '#C8A67A',
-  low:        '#84B296',
+  text:       '#2F3C4A',
+  surface2:   '#EEEDE8',
+  surface3:   '#E5E4DF',
+  neutral:    '#7C7A76',
+  high:       '#D08A84',
+  medium:     '#D8B98A',
+  low:        '#A6C0AE',
 
   // Signal type flat colors (kept for review/[id].tsx backward compat)
-  risk:                '#F7EEEE',
-  riskText:            '#C07E78',
-  opportunity:         '#EDF5F0',
-  opportunityText:     '#84B296',
-  win:                 '#EDF5F0',
-  winText:             '#84B296',
-  task:                '#E5E1DA',
-  taskText:            '#5A5048',
-  relationship:        '#E5E1DA',
-  relationshipText:    '#5A5048',
-  implementation:      '#E5E1DA',
-  implementationText:  '#5A5048',
-  milestone:           '#E5E1DA',
-  milestoneText:       '#5A5048',
-  continuity:          '#E5E1DA',
-  continuityText:      '#5A5048',
-  crm:                 '#E5E1DA',
-  crmText:             '#5A5048',
-  referral_pathway:    '#E5E1DA',
-  referral_pathwayText:'#5A5048',
-  momentum:            '#E5E1DA',
-  momentumText:        '#5A5048',
-  question:            '#E5E1DA',
-  questionText:        '#5A5048',
+  risk:                '#F8EFEE',
+  riskText:            '#D08A84',
+  opportunity:         '#EEF4EF',
+  opportunityText:     '#A6C0AE',
+  win:                 '#EEF4EF',
+  winText:             '#A6C0AE',
+  task:                '#E5E4DF',
+  taskText:            '#2F3C4A',
+  relationship:        '#E5E4DF',
+  relationshipText:    '#2F3C4A',
+  implementation:      '#E5E4DF',
+  implementationText:  '#2F3C4A',
+  milestone:           '#E5E4DF',
+  milestoneText:       '#2F3C4A',
+  continuity:          '#E5E4DF',
+  continuityText:      '#2F3C4A',
+  crm:                 '#E5E4DF',
+  crmText:             '#2F3C4A',
+  referral_pathway:    '#E5E4DF',
+  referral_pathwayText:'#2F3C4A',
+  momentum:            '#E5E4DF',
+  momentumText:        '#2F3C4A',
+  question:            '#E5E4DF',
+  questionText:        '#2F3C4A',
 };
 
 // ─── Radius & shadow tokens ───────────────────────────────────────────────────
